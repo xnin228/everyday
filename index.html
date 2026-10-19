@@ -778,7 +778,7 @@ function farmTarget(e){
 }
 function updE(dt,LST){
   (LST||ENT).forEach(function(e){
-    var sp={hen:20,cow:12,sheep:10,pig:12,cat:16,dog:36,farmer:30}[e.t],dx,dy,dist;
+    var sp={hen:20,cow:12,sheep:10,pig:12,cat:16,dog:36,farmer:30}[e.t]||WSP[e.t],dx,dy,dist;
     if(e.wait>0){e.wait-=dt;e.mv=0;if(e.wait<=0){if(e.t==='farmer')farmTarget(e);else{e.tx=e.a[0]+Math.random()*(e.a[2]-e.a[0]);e.ty=e.a[1]+Math.random()*(e.a[3]-e.a[1])}}return}
     dx=e.tx-e.x;dy=e.ty-e.y;dist=Math.sqrt(dx*dx+dy*dy);
     if(dist<2){e.wait=(e.t==='farmer'?300:1200)+Math.random()*2800;e.mv=0;return}
@@ -828,12 +828,70 @@ function dCart(g,x,y,f){g.save();g.translate(Math.round(x),y);
   R(g,'#2b1b12',22,-42,10,18);R(g,'#8a5a2b',23,-41,8,16);R(g,'#2b1b12',26,-44,12,10);R(g,'#8a5a2b',27,-43,10,8);R(g,'#2b1b12',33,-38,2,2);R(g,'#3a2417',21,-44,4,12);R(g,'#2b1b12',-6,-28,5,13);
   var o=f?2:0;R(g,'#2b1b12',2,-15,4,15-o);R(g,'#2b1b12',9,-15,4,13+o);R(g,'#2b1b12',17,-15,4,15-o);R(g,'#2b1b12',23,-15,4,13+o);g.restore()}
 function bubble(g,x,y,k,now){var o=Math.round(Math.sin(now/260)*2);R(g,'#3a2417',x-14,y-30+o,28,26);R(g,'#fff3d6',x-12,y-28+o,24,22);R(g,'#3a2417',x-3,y-6+o,6,4);R(g,'#fff3d6',x-2,y-6+o,4,3);drawSpr(g,k,x-8,y-26+o,2)}
+/* ===== ОБИТАТЕЛИ МИРОВ: по карте ходят существа по теме ===== */
+var WSP={raptor:44,trike:17,bronto:9,ptero:34,frog:26,croc:10,dfly:42,rbdog:36,cbot:20,drone:38,ufo:24};
+function wt(g,x,y,d){g.save();g.translate(Math.round(x),Math.round(y));g.scale(d,1)}
+function dRaptor(g,x,y,d,f){wt(g,x,y,d);R(g,'rgba(0,0,0,.2)',-14,-2,30,4);
+  R(g,'#1d4a1f',-20,-15,13,6);R(g,'#3fae4a',-19,-14,11,3);R(g,'#1d4a1f',-26,-12,7,4);
+  R(g,'#1d4a1f',-9,-22,20,15);R(g,'#3fae4a',-8,-21,18,12);R(g,'#a6e07a',-5,-13,13,3);
+  R(g,'#d9442e',-6,-25,3,4);R(g,'#d9442e',-1,-26,3,5);R(g,'#d9442e',4,-25,3,4);
+  R(g,'#1d4a1f',8,-32,14,12);R(g,'#3fae4a',9,-31,12,10);R(g,'#ffe27a',15,-30,4,4);R(g,'#2b1b12',17,-29,2,2);R(g,'#fff',14,-23,7,2);R(g,'#1d4a1f',20,-27,4,5);
+  R(g,'#1d4a1f',10,-18,5,3);var o=f?3:0;R(g,'#1d4a1f',-5,-8,5,8-o);R(g,'#1d4a1f',3,-8,5,5+o);R(g,'#fff',-5,-1-o,2,1);R(g,'#fff',5,-1,2,1);g.restore()}
+function dTrike(g,x,y,d,f){wt(g,x,y,d);R(g,'rgba(0,0,0,.2)',-18,-2,38,4);
+  R(g,'#4a3a22',-18,-26,32,20);R(g,'#b08a4a',-17,-25,30,16);R(g,'#8a6a32',-17,-13,30,4);R(g,'#c9a45a',-12,-25,12,3);
+  R(g,'#4a3a22',10,-34,18,20);R(g,'#c0392b',11,-33,6,18);R(g,'#e8714a',12,-32,4,14);R(g,'#b08a4a',16,-30,11,14);
+  R(g,'#fff3d6',26,-30,6,3);R(g,'#fff3d6',22,-37,3,8);R(g,'#fff3d6',27,-36,3,7);R(g,'#2b1b12',20,-26,2,2);
+  var o=f?2:0;R(g,'#4a3a22',-12,-8,6,8-o);R(g,'#4a3a22',-3,-8,6,6+o);R(g,'#4a3a22',5,-8,6,8-o);R(g,'#4a3a22',11,-8,5,6+o);R(g,'#4a3a22',-23,-18,6,4);g.restore()}
+function dBronto(g,x,y,d,f){wt(g,x,y,d);R(g,'rgba(0,0,0,.2)',-26,-2,56,5);
+  R(g,'#2b4a2a',-30,-20,10,6);R(g,'#4f8f4a',-29,-19,8,3);
+  R(g,'#2b4a2a',-22,-34,42,28);R(g,'#5fa85a',-21,-33,40,24);R(g,'#8fcf7a',-16,-18,30,5);R(g,'#3f7f3a',-16,-33,8,4);R(g,'#3f7f3a',2,-34,8,4);
+  R(g,'#2b4a2a',14,-66,10,40);R(g,'#5fa85a',15,-65,8,38);R(g,'#8fcf7a',20,-60,3,30);
+  R(g,'#2b4a2a',14,-74,16,12);R(g,'#5fa85a',15,-73,14,10);R(g,'#2b1b12',24,-71,2,2);R(g,'#d9768a',27,-67,3,2);
+  var o=f?2:0;R(g,'#2b4a2a',-18,-10,8,10-o);R(g,'#2b4a2a',-6,-10,8,8+o);R(g,'#2b4a2a',6,-10,8,10-o);R(g,'#2b4a2a',15,-10,8,8+o);g.restore()}
+function dPtero(g,x,y,d,f,now,e){var h=46+Math.sin(now/400+e.ph)*4;R(g,'rgba(0,0,0,.18)',Math.round(x)-9,Math.round(y)-2,18,4);
+  wt(g,x,y-h,d);var w=f?-4:5;
+  R(g,'#5a2a1a',-6,-8,14,8);R(g,'#c0643a',-5,-7,12,6);R(g,'#5a2a1a',6,-12,10,7);R(g,'#c0643a',7,-11,8,5);R(g,'#5a2a1a',14,-10,10,3);R(g,'#e0a04a',15,-10,8,2);R(g,'#c0392b',2,-17,6,6);R(g,'#2b1b12',11,-10,2,2);
+  R(g,'#5a2a1a',-18,-8+w,16,3);R(g,'#8a4a2a',-17,-7+w,14,1);R(g,'#5a2a1a',-4,-8+w,14,3);R(g,'#8a4a2a',-3,-7+w,12,1);R(g,'#5a2a1a',-10,-5,5,3);g.restore()}
+function dFrog(g,x,y,d,f,now,e){var j=e.mv?Math.abs(Math.sin(now/110+e.ph))*6:0;R(g,'rgba(0,0,0,.2)',Math.round(x)-6,Math.round(y)-2,13,3);
+  wt(g,x,y-j,d);R(g,'#1d4a1f',-6,-8,13,8);R(g,'#5fc03a',-5,-7,11,6);R(g,'#b8f07a',-3,-3,7,2);R(g,'#1d4a1f',3,-12,6,6);R(g,'#5fc03a',4,-11,4,4);R(g,'#fff',5,-12,2,2);R(g,'#2b1b12',6,-11,1,1);R(g,'#1d4a1f',-9,-3,4,3);R(g,'#1d4a1f',5,-3,4,3);g.restore()}
+function dCroc(g,x,y,d,f,now,e){wt(g,x,y,d);var b=Math.round(Math.sin(now/600+e.ph));R(g,'rgba(0,0,0,.15)',-20,-1,42,4);
+  R(g,'#1d3a1a',-24,-8+b,12,4);R(g,'#2f6a2a',-23,-7+b,10,2);R(g,'#1d3a1a',-14,-11+b,26,9);R(g,'#3f8f3a',-13,-10+b,24,6);R(g,'#2f6a2a',-10,-12+b,3,2);R(g,'#2f6a2a',-4,-12+b,3,2);R(g,'#2f6a2a',2,-12+b,3,2);
+  R(g,'#1d3a1a',10,-12+b,16,8);R(g,'#3f8f3a',11,-11+b,14,5);R(g,'#ffe27a',12,-14+b,4,3);R(g,'#2b1b12',13,-13+b,2,2);R(g,'#fff',17,-7+b,2,2);R(g,'#fff',21,-7+b,2,2);g.restore()}
+function dDfly(g,x,y,d,f,now,e){var h=26+Math.sin(now/330+e.ph)*6;R(g,'rgba(0,0,0,.15)',Math.round(x)-4,Math.round(y)-1,9,3);
+  wt(g,x,y-h,d);R(g,'#1fa7a0',-5,-2,10,2);R(g,'#33e0ff',-4,-2,3,1);R(g,'#2b1b12',5,-3,2,3);var w=f?-4:-2;R(g,'rgba(255,255,255,.8)',-2,w-3,6,3);R(g,'rgba(255,255,255,.55)',-4,w-1,5,2);g.restore()}
+function dRbdog(g,x,y,d,f){wt(g,x,y,d);R(g,'rgba(0,0,0,.2)',-13,-2,28,4);
+  R(g,'#1d2733',-13,-18,26,11);R(g,'#aab6c6',-12,-17,24,8);R(g,'#dfe6ef',-9,-17,12,2);R(g,'#33e0ff',-4,-13,6,2);
+  R(g,'#1d2733',10,-25,12,11);R(g,'#dfe6ef',11,-24,10,8);R(g,'#33e0ff',17,-22,3,3);R(g,'#1d2733',13,-30,2,6);R(g,'#ff3d6e',12,-32,4,3);R(g,'#1d2733',-17,-18,5,3);
+  var o=f?2:0;R(g,'#1d2733',-10,-8,4,8-o);R(g,'#1d2733',-3,-8,4,6+o);R(g,'#1d2733',5,-8,4,8-o);R(g,'#1d2733',10,-8,4,6+o);g.restore()}
+function dCbot(g,x,y,d,f,now){wt(g,x,y,d);R(g,'rgba(0,0,0,.2)',-11,-2,24,4);
+  R(g,'#1d2733',-11,-6,22,5);R(g,'#8896aa',-10,-5,20,3);pell(g,'#1d2733',0,-11,10,7);pell(g,'#dfe6ef',0,-11,9,6);R(g,'#c8d4e4',-6,-15,6,2);
+  var c=((now/300)|0)%2?'#33e0ff':'#ffe27a';R(g,c,-1,-12,4,3);R(g,'#1d2733',8,-9,4,2);g.restore()}
+function dDrone(g,x,y,d,f,now,e){var h=44+Math.sin(now/350+e.ph)*5;R(g,'rgba(0,0,0,.18)',Math.round(x)-7,Math.round(y)-2,15,4);
+  wt(g,x,y-h,d);R(g,'#1d2733',-6,-6,13,6);R(g,'#aab6c6',-5,-5,11,4);R(g,((now/250)|0)%2?'#ff3d6e':'#33e0ff',-1,-4,3,2);
+  var r=f?9:5;R(g,'#1d2733',-11,-9,3,3);R(g,'#1d2733',9,-9,3,3);R(g,'rgba(200,230,255,.8)',-10-r/2,-10,r+2,1);R(g,'rgba(200,230,255,.8)',10-r/2,-10,r+2,1);g.restore()}
+function dUfo(g,x,y,d,f,now,e){var h=62+Math.sin(now/500+e.ph)*5;R(g,'rgba(0,0,0,.18)',Math.round(x)-12,Math.round(y)-2,25,5);
+  wt(g,x,y-h,d);pell(g,'#2f6f7a',0,-10,8,7);pell(g,'rgba(150,240,255,.85)',0,-12,7,6);R(g,'#c8f7ff',-3,-17,3,2);
+  pell(g,'#1d2733',0,-5,17,5);pell(g,'#8896aa',0,-6,16,4);var k=((now/200)|0)%3,i;for(i=0;i<3;i++)R(g,i===k?'#ffe27a':'#33e0ff',-9+i*8,-6,3,2);
+  if(((now/3000)|0)%3===0){g.fillStyle='rgba(255,240,150,.22)';g.beginPath();g.moveTo(-6,-2);g.lineTo(6,-2);g.lineTo(12,h);g.lineTo(-12,h);g.fill()}g.restore()}
+var WDRAW={raptor:dRaptor,trike:dTrike,bronto:dBronto,ptero:dPtero,frog:dFrog,croc:dCroc,dfly:dDfly,rbdog:dRbdog,cbot:dCbot,drone:dDrone,ufo:dUfo};
+var WFLY={ptero:1,dfly:1,drone:1,ufo:1};
+function wildDefs(w){
+  var road=[10,402,500,430],land=[10,786,502,Math.max(800,MH-14)],mead=[10,640,160,735],sky=[24,70,488,Math.max(300,MH-60)],pond=[24,500,120,600];
+  if(w==='dino')return[['raptor',road],['raptor',land],['trike',land],['trike',mead],['bronto',land],['ptero',sky],['ptero',sky]];
+  if(w==='swamp')return[['frog',land],['frog',land],['frog',mead],['frog',road],['croc',pond],['dfly',sky],['dfly',sky],['dfly',sky]];
+  if(w==='future')return[['rbdog',road],['cbot',land],['cbot',land],['cbot',mead],['drone',sky],['drone',sky],['ufo',sky]];
+  return[];
+}
+var WLC={};
+function wildList(){var w=wid(),k=w+':'+(S.ld||0);if(!WLC[k]){var n=0,q;for(q in WLC)n++;if(n>4)WLC={};WLC[k]=wildDefs(w).map(function(a){var e=mkE(a[0],a[1]);e.ph=Math.random()*6;e.fly=WFLY[a[0]]?1:0;return e})}return WLC[k]}
 function drawMap(now){
   BG=bgFor();if(!ENT)initEnt();
   var g=MG,dt=Math.min(100,MLAST?now-MLAST:80),i,L=[];MLAST=now;
   g.drawImage(BG,0,0);
   drawPlots(g,now);
   S.obj.forEach(function(o){var q=OBJ_BY[o.k];if(q)L.push([o.y*16+q.h*16-1,function(){q.d(g,o.x*16,o.y*16,q.w,q.h,now)}])});
+  var WL=wildList();updE(dt,WL);
+  WL.forEach(function(e){L.push([e.fly?5000+e.y:e.y,function(){WDRAW[e.t](g,e.x,e.y,e.d,e.mv?e.f:0,now,e)}])});
   updE(dt);CART.x+=dt*.045;if(CART.x>620)CART.x=-90;CARTX=CART.x;
   ENT.forEach(function(e){if(!showE(e))return;L.push([e.y,function(){
     if(e.t==='hen')dHen(g,e.x,e.y,e.d,e.mv?e.f:0,e.v);else if(e.t==='cow')dCow(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='sheep')dSheep(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='pig')dPig(g,e.x,e.y,e.d,e.mv?e.f:0);
