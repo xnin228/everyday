@@ -100,17 +100,32 @@ body{position:relative}
 @media (prefers-reduced-motion:reduce){#henb{animation:none}}
 #evb{display:none;text-align:center;padding:6px 10px;font:400 14px 'Lilita One','Trebuchet MS',sans-serif;color:#fff;background:linear-gradient(90deg,#e0531f,#f7a21f,#e0531f);border-bottom:4px solid var(--ink);text-shadow:0 2px 0 rgba(0,0,0,.35)}#evb.on{display:block}
 main{padding-bottom:96px}
+/* телефон: крупные зоны нажатия, ничего не налезает */
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+header{gap:8px;padding:8px 10px}
+.coins{min-width:0;font-size:11px;padding:6px}
+.btn{min-height:44px;padding:8px 12px;font-size:10px}
+.card{flex-wrap:wrap;gap:8px 10px}.card .t{flex:1 1 140px;min-width:0}.card .btn,.card .r{flex:none}
+.seed{min-height:58px;font-size:8px}.seed small{font-size:8px}
+.wbar{gap:5px}.wbar button{min-height:62px;font-size:8px;line-height:1.3}.wbar button b{font-size:9px}.wbar svg.px{width:26px;height:26px}
+#tabs button{min-height:58px;padding:6px 0 8px!important;font-size:8px!important}
+#tabs button svg.px{width:26px;height:26px;margin-bottom:3px}
+#henb{width:56px!important;height:56px!important}
+#hen{left:4px!important;bottom:calc(64px + env(safe-area-inset-bottom,0px))!important}
+#hb{font-size:13px!important;max-height:42vh;overflow:auto;padding:10px 38px 10px 12px!important}
+#fox{bottom:calc(190px + env(safe-area-inset-bottom,0px))}
+main{padding-bottom:120px}
+@media (max-width:380px){#tabs button{font-size:7px!important}.btn{font-size:9px}}
+
 .hero{background:linear-gradient(135deg,#7c3aed,#f7a21f);border:4px solid var(--ink);box-shadow:0 4px 0 var(--ink);padding:14px;margin-bottom:12px;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.4);display:flex;flex-direction:column;gap:4px}.hero b{font-size:16px}.hero span{font-size:9px;line-height:1.4}
-#fab{position:absolute;right:10px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:9;display:flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;border:4px solid var(--ink);border-radius:999px;background:linear-gradient(#ffe27a,#f7a21f);box-shadow:0 5px 0 var(--ink),0 0 18px rgba(255,200,60,.65);color:#3a2417;font-size:10px;animation:fabp 2s ease-in-out infinite;overflow:hidden}
-#fab[hidden]{display:none}
-#fab svg.px{width:24px;height:24px;display:block}
-#fab b{font-weight:400;letter-spacing:.5px}
-#fab i{font-style:normal;background:#e53935;color:#fff;border:2px solid var(--ink);border-radius:8px;padding:1px 4px;font-size:8px;display:none}
-#fab.on i{display:inline-block}
-#fab::after{content:"";position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.65),transparent);animation:fabs 3.2s ease-in-out infinite}
-@keyframes fabp{50%{transform:translateY(-3px) scale(1.04)}}
-@keyframes fabs{0%,60%{left:-60%}100%{left:130%}}
-@media (prefers-reduced-motion:reduce){#fab,#fab::after{animation:none}}
+#fab{position:relative;flex:none;width:46px;height:46px;padding:0;border:4px solid var(--ink);border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff2a8,#f7a21f 70%);box-shadow:0 4px 0 var(--ink),0 0 14px rgba(255,200,60,.8);animation:fabp 2s ease-in-out infinite}
+#fab svg.px{width:26px;height:26px;display:block;margin:auto}
+#fab i{position:absolute;top:-9px;right:-9px;font-style:normal;background:#e53935;color:#fff;border:2px solid var(--ink);border-radius:8px;padding:2px 4px;font-size:8px;display:none;line-height:1}
+#fab.on i{display:block}
+@keyframes fabp{50%{transform:scale(1.08)}}
+@media (prefers-reduced-motion:reduce){#fab{animation:none}}
+.wbar button.gold{background:linear-gradient(#ffe27a,#f7a21f)}
+
 .wbar{display:flex;gap:6px;margin-bottom:10px}.wbar button{flex:1;min-width:0;background:var(--panel);border:4px solid var(--ink);box-shadow:0 4px 0 var(--ink);padding:6px 2px;font-size:7px;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:2px}.wbar button b{font-weight:400;font-size:8px}.wbar svg.px{width:20px;height:20px}
 .wc .wp{width:96px;height:56px;image-rendering:pixelated;border:3px solid var(--ink);flex:none;background:#6cc24a}.wc.cur{background:#e4f4c8}
 .op{width:48px;height:48px;object-fit:contain;image-rendering:pixelated;flex:none;background:#8fd05a;border:3px solid var(--ink)}
@@ -139,6 +154,7 @@ main{padding-bottom:96px}
   <button class="btn alt" id="prof" aria-label="Профиль"></button>
   <div class="coins" id="coins"></div>
   <div class="lv"><b id="lvl"></b><div class="bar"><i id="xpb"></i></div></div>
+<button id="fab" data-tab="shop" aria-label="Донат">⭐<i></i></button>
 <button class="btn alt" id="snd" aria-label="Музыка"></button>
 </header>
 <div id="evb" role="status"></div>
@@ -152,7 +168,6 @@ main{padding-bottom:96px}
   <button data-tab="barn"><span>🏚️</span>Амбар</button>
   <button data-tab="daily"><span>🎁</span>Награды</button>
 </nav>
-<button id="fab" data-tab="shop" aria-label="Донат"><span class="fi">⭐</span><b>Донат</b><i></i></button>
 <button id="fox" hidden aria-label="Лиса"></button>
 <div id="hen"><div id="hb" role="status"></div><button id="henb" aria-label="Майк"></button></div>
 <div id="toast" role="status"></div>
@@ -211,6 +226,10 @@ var SPR={
 '🥓':['........','.kkkkkk.','kPrPrPrk','krPrPrPk','kPrPrPrk','krPrPrPk','.kkkkkk.','........'],
 '🧶':['..kkkk..','.kppppk.','kppPpppk','kpPppPpk','kpppPppk','kpPpppPk','.kppppk.','..kkkk..'],
 '❌':['r......r','.r....r.','..r..r..','...rr...','...rr...','..r..r..','.r....r.','r......r'],
+'⭐':['...kk...','...kYk..','kkkkYYkk','kYYYYYYk','.kYYYYk.','.kYYYYk.','kYYkkYYk','.kk..kk.'],
+'🏗':['.kkkkkk.','kBBBBBBk','kBBBBBBk','.kkkbkk.','...kbk..','...kbk..','...kbk..','...kkk..'],
+'🌍':['..kkkk..','.kBBgBk.','kBgggBBk','kBggBBBk','kBBBgggk','kBBgggBk','.kBBgBk.','..kkkk..'],
+'🏡':['...kk...','..krrk..','.krrrrk.','krrrrrrk','.kwwwwk.','.kwkbwk.','.kwkbwk.','.kkkkkk.'],
 '⚡':['...kkk..','..kyyk..','.kyyk...','kyyyyyk.','.kkyyk..','..kyk...','..kk....','........']
 };
 var SVGC={};
@@ -394,7 +413,7 @@ function renderHen(){
   if(!S.fname){HEN.open=true;h='<b>Майк:</b> Привет, фермер! Я Майк, держу старую мельницу неподалёку от города. Как называется эта чудесная ферма?<input id="fn" maxlength="16" placeholder="Название фермы" autocomplete="off"><button class="btn" data-fn="1">Готово</button>'}
   else if(st)h='<b>Майк:</b> '+st.t+'<br>'+(S.sp>=st.need?'<button class="btn" data-hen="1">Забрать +'+st.r+' 🪙</button>':'Прогресс: '+S.sp+'/'+st.need);
   else h='<b>Майк:</b> '+TIPS[S.tip%TIPS.length];
-  if(S.fname)h='<button class="x" data-hx="1" aria-label="Закрыть">×</button>'+h;$('#hb').innerHTML=E(h);$('#hb').hidden=!HEN.open;if(HEN.open&&st)HEN.seen=S.st;$('#henb').classList.toggle('dot',!HEN.open&&!!st&&!!S.fname&&(S.sp>=st.need||HEN.seen!==S.st));$('#henb').innerHTML=''
+  if(S.fname)h='<button class="x" data-hx="1" aria-label="Закрыть">×</button>'+h;$('#hb').innerHTML=E(h);$('#hb').hidden=!HEN.open;clearTimeout(renderHen.t);if(HEN.open&&S.fname&&!(st&&S.sp>=st.need))renderHen.t=setTimeout(function(){HEN.open=false;renderHen()},12000);if(HEN.open&&st)HEN.seen=S.st;$('#henb').classList.toggle('dot',!HEN.open&&!!st&&!!S.fname&&(S.sp>=st.need||HEN.seen!==S.st));$('#henb').innerHTML=''
 }
 $('#henb').addEventListener('click',function(){if(!STORY[S.st]&&!HEN.open)S.tip++;HEN.open=!HEN.open;renderHen()});
 var MU={on:true,ctx:null,next:0,step:0,t:0};
@@ -553,7 +572,6 @@ function daily(){if(S.qd!==today()){S.qd=today();S.quests=genQ();save()}if(!S.fa
 function qp(k,n){sp(k,n);S.ac[k]=(S.ac[k]||0)+n;S.quests.forEach(function(q){if(q.k===k&&!q.done)q.p=Math.min(q.need,q.p+n)})}
 function claimBonus(){if(S.claimed===today())return;S.streak=S.claimed===yday()?S.streak+1:1;S.claimed=today();var r=BON[(S.streak-1)%7];S.coins+=r;addXp(2);toast('Награда дня: +'+r+' 🪙');qp('bonus',1);save();paint()}
 function claimQ(k){var q=S.quests[k];if(q.done||q.p<q.need)return;q.done=1;S.coins+=q.r;addXp(3);toast('Задание: +'+q.r+' 🪙');save();paint()}
-function openChest(){if(S.chest>Date.now())return;var r=15+Math.floor(Math.random()*(30+lvl()*10));S.chest=Date.now()+4*3600000;S.coins+=r;addXp(1);toast('Сундук: +'+r+' 🪙');save();paint()}
 function collect(i){var a=ANIM[i];if(used()+1>capN())return toast('Амбар полон — продайте товар');S.inv[a.item]=(S.inv[a.item]||0)+1;S.pen[i]=Date.now();addXp(2);qp('animal',1);toast('+1 '+byId(a.item).e);save();paint()}
 function buyAnim(i){var a=ANIM[i];if(S.coins<a.buy)return toast('Нужно '+a.buy+' 🪙');S.coins-=a.buy;S.pen[i]=Date.now();toast(a.n+' на дворе!');save();paint()}
 var SPEEDK=0.25;/* монет за секунду ускорения */
@@ -585,8 +603,7 @@ function viewDaily(){
   var q=S.quests.map(function(q,k){
     return'<div class="card"><div class="t">'+q.t+' '+q.p+'/'+q.need+'<div class="r">+'+q.r+' 🪙</div></div>'+(q.done?'<span class="r">Готово</span>':'<button class="btn" data-q="'+k+'"'+(q.p>=q.need?'':' disabled')+'>Забрать</button>')+'</div>'
   }).join('');
-  var ch=S.chest>Date.now()?'<span class="r" data-ts="'+S.chest+'"></span>':'<button class="btn alt" data-chest="1">Открыть</button>';
-  return'<h2>Серия: '+cur+' дн.</h2><div class="days">'+days+'</div><button class="btn" data-bonus="1" style="width:100%;margin-bottom:14px"'+(cl?' disabled':'')+'>'+(cl?'Получено. Приходите завтра!':'Забрать награду дня')+'</button><h2>Задания дня</h2>'+q+'<div class="card"><div class="t">🎁 Сундук<div class="r">Бесплатно раз в 4 часа</div></div>'+ch+'</div>'
+  return'<h2>Серия: '+cur+' дн.</h2><div class="days">'+days+'</div><button class="btn" data-bonus="1" style="width:100%;margin-bottom:14px"'+(cl?' disabled':'')+'>'+(cl?'Получено. Приходите завтра!':'Забрать награду дня')+'</button><h2>Задания дня</h2>'+q
 }
 function tickTs(no){
   var n=Date.now(),re=0;
@@ -599,7 +616,7 @@ function alerts(){
     farm:S.plots.some(function(p,i){var s=i<S.unlocked&&plotState(p);return s&&s.ready}),
     pen:S.pen.some(function(t,i){return t&&n>=t+ANIM[i].time*1000})||!!(S.oven&&n>=S.oven.t+BAKE[S.oven.r].time*1000),
     barn:mer().on&&used()>0,orders:S.orders.some(function(o){for(var id in o.items)if((S.inv[id]||0)<o.items[id])return false;return true}),
-    daily:S.claimed!==today()||S.chest<=n||S.quests.some(function(q){return!q.done&&q.p>=q.need})
+    daily:S.claimed!==today()||S.quests.some(function(q){return!q.done&&q.p>=q.need})
   };
   document.querySelectorAll('#tabs button').forEach(function(b){b.classList.toggle('dot',!!a[b.dataset.tab]&&b.dataset.tab!==tab)});
   $('#prof').classList.toggle('dot',tab!=='profile'&&(S.wheel!==today()||ACH.some(function(x){var g=S.ag[x.k]||0;return g<3&&(S.ac[x.k]||0)>=x.tiers[g]})))
@@ -636,7 +653,7 @@ function viewBarn(){
 function paint(){
   setMH();paintHead();
   daily();$('#view').innerHTML=E(tab==='farm'?viewFarm():tab==='orders'?viewOrders():tab==='pen'?viewPen()+viewOven():tab==='daily'?viewDaily():tab==='shop'?viewDonate():tab==='build'?viewBuild():tab==='worlds'?viewWorlds():tab==='farms'?viewFarms():tab==='visit'?viewVisit():tab==='profile'?viewProfile():tab==='town'?viewTown():tab==='top'?viewTop():tab==='credits'?viewCredits():viewBarn());alerts();tickTs(1);renderHen();
-  if(tab==='farm'){tick(true);initMap()}else if(tab==='visit')initMap();else if(tab==='pen')initPen();var fb=$('#fab');if(fb){fb.hidden=(tab==='shop');fb.classList.toggle('on',bxm()>1||vipOn());fb.querySelector('i').textContent=bxm()>1?'×'+S.bx.m:vipOn()?'VIP':''}
+  if(tab==='farm'){tick(true);initMap()}else if(tab==='visit')initMap();else if(tab==='pen')initPen();var fb=$('#fab');if(fb){fb.classList.toggle('on',bxm()>1||vipOn());fb.querySelector('i').textContent=bxm()>1?'×'+S.bx.m:vipOn()?'VIP':''}
 }
 function tick(force){
   if(tab!=='farm'||(DOWN&&!force))return;
@@ -965,7 +982,7 @@ function worldPrev(k){var key=k+(SAOK?1:0);WPV=window.WPV||(window.WPV={});if(WP
     pell(g,TH.sand,150,84,28,16);pell(g,TH.water,150,84,24,12);R(g,TH.ripple,140,82,8,1);
     TH.tree(g,34,74);TH.tree(g,98,58);TH.bush(g,64,96);TH.rock(g,100,100);TH.flower(g,22,100);TH.flower(g,128,50);TH.bush(g,172,40)});
   var u=c.toDataURL();if(SAOK||k!=='farm')WPV[key]=u;return u}
-function worldBar(){return'<div class="wbar"><button data-tab="worlds">🌍<b>Мир</b>'+esc(wd().n.replace('Мир ',''))+'</button><button data-tab="build">🏗<b>Стройка</b>'+S.obj.length+' шт.</button><button data-tab="farms">🏡<b>Фермы</b>игроков</button></div>'}
+function worldBar(){return'<div class="wbar"><button data-tab="worlds">🌍<b>Мир</b>'+esc(wd().n.replace('Мир ',''))+'</button><button data-tab="build">🏗<b>Стройка</b>'+S.obj.length+' шт.</button><button data-tab="farms">🏡<b>Фермы</b>игроков</button><button class="gold" data-tab="shop">⭐<b>Донат</b>бонусы</button></div>'}
 function viewWorlds(){var h='<h2>🌍 Миры</h2><p class="empty" style="margin:0 0 12px">Миры открываются по уровню бесплатно. В каждом свой пейзаж, бонус и особые постройки.</p>';
   WORDER.forEach(function(k){var w=WORLDS[k],ok=lvl()>=w.l,cur=wid()===k;
     h+='<div class="card wc'+(cur?' cur':'')+'"><img class="wp" src="'+worldPrev(k)+'" alt=""><div class="t">'+w.e+' '+w.n+'<div class="r">Бонус: '+w.t+'</div>'+(w.l?'<div class="r">Открывается с '+w.l+' уровня</div>':'')+'</div>'+(cur?'<span class="r">Здесь</span>':ok?'<button class="btn" data-zw="'+k+'">Перейти</button>':'<span class="r">🔒 ур. '+w.l+'</span>')+'</div>'});
@@ -1199,7 +1216,7 @@ document.addEventListener('click',function(e){
   else if(d.o!==undefined)deliver(+d.o);
   else if(d.sell)sell(d.sell,false);
   else if(d.all)sell(d.all,true);
-  else if(d.up)upgrade();else if(d.bonus)claimBonus();else if(d.q!==undefined)claimQ(+d.q);else if(d.chest)openChest();else if(d.col!==undefined)collect(+d.col);else if(d.buy!==undefined)buyAnim(+d.buy);else if(d.hen)claimHen();else if(d.bake!==undefined)bake(+d.bake);else if(d.take)takeBake();else if(d.ach)claimAch(d.ach);else if(d.coll)claimColl();else if(d.fair)giveFair();else if(d.inv)invite();else if(d.fert)buyFert();else if(d.pet)buyShop(d.pet,'pet');else if(d.dec)buyShop(d.dec,'dec');else if(d.spin)spin();else if(d.mat)buyMat(d.mat);else if(d.put)putShop(d.put);else if(d.unput!==undefined)takeShop(+d.unput);else if(d.top){tab='top';topLoad();paint()}else if(d.zs)buySku(d.zs);else if(d.zo)openChest(d.zo);else if(d.zb)bpClaim(d.zb);else if(d.zw)setWorld(d.zw);else if(d.zm){ZM=+d.zm;paint()}else if(d.zd){ZD=+d.zd;paint()}else if(d.spd)speedUp(d.spd,false);else if(d.spdf)speedUp(d.spdf,true);else if(d.hx){HEN.open=false;renderHen()}
+  else if(d.up)upgrade();else if(d.bonus)claimBonus();else if(d.q!==undefined)claimQ(+d.q);else if(d.col!==undefined)collect(+d.col);else if(d.buy!==undefined)buyAnim(+d.buy);else if(d.hen)claimHen();else if(d.bake!==undefined)bake(+d.bake);else if(d.take)takeBake();else if(d.ach)claimAch(d.ach);else if(d.coll)claimColl();else if(d.fair)giveFair();else if(d.inv)invite();else if(d.fert)buyFert();else if(d.pet)buyShop(d.pet,'pet');else if(d.dec)buyShop(d.dec,'dec');else if(d.spin)spin();else if(d.mat)buyMat(d.mat);else if(d.put)putShop(d.put);else if(d.unput!==undefined)takeShop(+d.unput);else if(d.top){tab='top';topLoad();paint()}else if(d.zs)buySku(d.zs);else if(d.zo)openChest(d.zo);else if(d.zb)bpClaim(d.zb);else if(d.zw)setWorld(d.zw);else if(d.zm){ZM=+d.zm;paint()}else if(d.zd){ZD=+d.zd;paint()}else if(d.spd)speedUp(d.spd,false);else if(d.spdf)speedUp(d.spdf,true);else if(d.hx){HEN.open=false;renderHen()}
   else if(d.ob)buyObj(d.ob);else if(d.bok)bldConfirm();else if(d.bcn){BLD=null;paint()}else if(d.bmv)bldMove();else if(d.bsl)bldSell();else if(d.bex)expandLand();else if(d.vf)visitFarm(d.vf);else if(d.vr){FARMS=null;paint()}
 });
 try{var w=tg();if(w){w.ready();w.expand();if(w.disableVerticalSwipes)w.disableVerticalSwipes()}}catch(e){}
