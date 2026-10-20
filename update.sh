@@ -550,7 +550,9 @@ class H(BaseHTTPRequestHandler):
         except Exception: return self._send(400, {"error": "bad json"})
         try:
             if self.path == "/invoice": return self._send(200, payments.api_invoice(bot, body))
-            if self.path == "/claim": return self._send(200, payments.api_claim(body))
+            if self.path == "/claim":
+                if body.get("op") in ("box", "send", "ack"): return self._send(200, admin.mail_api(body, bot))
+                return self._send(200, payments.api_claim(body))
             if self.path == "/snap":
                 uid = payments.user_id(body.get("initData", ""))
                 if not uid: return self._send(200, {"ok": False})
@@ -653,6 +655,77 @@ def get_farm(h):
         if hid(u) == h:
             return {"name": v.get("name"), "lvl": v.get("lvl"), "xp": v.get("xp"), "snap": v.get("snap")}
     return None
+
+
+# ---------- почта: подарки друзьям ----------
+MAIL_DAY_LIMIT = 5        # подарков в сутки от одного игрока
+MAIL_BOX_MAX = 40         # подарков в ящике одного игрока
+
+
+def _mclean(s, n):
+    return re.sub(r"[<>&\"'`\\]", "", str(s or "")).strip()[:n]
+
+
+def mail_api(body, bot=None):
+    """Почта игроков. POST /claim с полем op: box (мой ящик) · send (отправить) · ack (подтвердить получение)."""
+    uid = P.user_id(body.get("initData", ""))
+    if not uid:
+        return {"ok": False, "err": "auth"}
+    op = body.get("op")
+    notify = None
+    with P._Lock():
+        d = P._load(); box = d.setdefault("mail", {})
+        mine = box.get(uid, [])
+        if op == "box":
+            return {"ok": True, "items": mine}
+        if op == "ack":
+            ids = set(str(x) for x in (body.get("ack") or []))
+            left = [m for m in mine if m["id"] not in ids]
+            if left: box[uid] = left
+            else: box.pop(uid, None)
+            P._save(d)
+            return {"ok": True}
+        if op != "send":
+            return {"ok": False, "err": "op"}
+        to = str(body.get("to", ""))
+        rid = None
+        for u in _pload():
+            if hid(u) == to: rid = u; break
+        if not rid: return {"ok": False, "err": "Игрок не найден"}
+        if rid == uid: return {"ok": False, "err": "Нельзя дарить самому себе"}
+        kind = body.get("kind")
+        try: n = int(body.get("n", 0))
+        except Exception: n = 0
+        k = ""
+        if kind == "coins":
+            if not 10 <= n <= 1000: return {"ok": False, "err": "Монеты: от 10 до 1000"}
+        elif kind == "fert":
+            if not 1 <= n <= 5: return {"ok": False, "err": "Удобрение: от 1 до 5"}
+        elif kind == "item":
+            k = str(body.get("k", ""))
+            if not re.fullmatch(r"[a-z]{2,12}", k) or not 1 <= n <= 20: return {"ok": False, "err": "Неверный подарок"}
+        else:
+            return {"ok": False, "err": "Неверный подарок"}
+        today = time.strftime("%Y-%m-%d")
+        q = d.setdefault("mailq", {}).get(uid) or {}
+        if q.get("d") != today: q = {"d": today, "n": 0}
+        if q["n"] >= MAIL_DAY_LIMIT:
+            return {"ok": False, "err": "Лимит: %d подарков в сутки" % MAIL_DAY_LIMIT}
+        rbox = box.get(rid, [])
+        if len(rbox) >= MAIL_BOX_MAX: return {"ok": False, "err": "У получателя переполнен ящик"}
+        pd = _pload()
+        fn = _mclean(body.get("fn"), 16) or _mclean((pd.get(uid) or {}).get("name"), 16) or "Друг"
+        g = {"id": uuid.uuid4().hex[:12], "fn": fn, "kind": kind, "k": k, "n": n, "msg": _mclean(body.get("msg"), 40), "t": int(time.time())}
+        rbox.append(g); box[rid] = rbox
+        q["n"] += 1; d["mailq"][uid] = q
+        P._save(d)
+        notify = (rid, fn)
+    if notify and bot:
+        def _n():
+            try: bot.send_message(int(notify[0]), "🎁 %s прислал(а) вам подарок!\nОткройте игру → вкладка «Почта»." % notify[1])
+            except Exception: pass
+        threading.Thread(target=_n, daemon=True).start()
+    return {"ok": True, "left": MAIL_DAY_LIMIT - q["n"]}
 
 
 # ---------- выдачи ----------

@@ -166,6 +166,7 @@ main{padding-bottom:120px}
   <button data-tab="orders"><span>🚚</span>Заказы</button>
   <button data-tab="town"><span>🏘</span>Город</button>
   <button data-tab="barn"><span>🏚️</span>Амбар</button>
+  <button data-tab="mail"><span>💌</span>Почта</button>
   <button data-tab="daily"><span>🎁</span>Награды</button>
 </nav>
 <button id="fox" hidden aria-label="Лиса"></button>
@@ -195,6 +196,9 @@ var SPR={
 '🔒':['..kkkk..','.k....k.','.k....k.','yyyyyyyy','yYyyyyYy','yyykkyyy','yyykkyyy','yyyyyyyy'],
 '🚚':['........','kkkkkk..','kwwwwkkk','kwwwwkbk','kwwwwkkk','kkkkkkkk','.kk..kk.','.kk..kk.'],
 '🏚':['...rr...','..rrrr..','.rrrrrr.','rrrrrrrr','bbwwwwbb','bbwkkwbb','bbwkkwbb','bbbkkbbb'],
+'💌':['........','kkkkkkkk','krwwwwrk','kwrwwrwk','kwwrrwwk','kwwwwwwk','kkkkkkkk','........'],
+'🥩':['..kkkk..','.krrrrk.','krPrrwrk','krrrrrrk','krrwrrPk','.krrrrk.','..kkkk..','........'],
+'🐟':['........','..kkk.k.','.kBBBkBk','kBwBBBBk','kBBBBBBk','.kBBBkBk','..kkk.k.','........'],
 '🥚':['..kkkk..','.kwwwwk.','kwwwwwwk','kwwwswwk','kwwwwwwk','kwwwwwwk','.kwwwwk.','..kkkk..'],
 '🥛':['..kkkk..','..kwwk..','.kwwwwk.','.kwBBwk.','.kwBBwk.','.kwwwwk.','.kwwwwk.','..kkkk..'],
 '🐔':['..rr....','..wwk...','.wwwwk..','wwwwwww.','wwwwwwwy','.wwwww..','..y..y..','..y..y..'],
@@ -237,7 +241,7 @@ function sv(k){if(SVGC[k])return SVGC[k];var n=window.ICN&&ICN[k];if(n&&window.S
 var RE=new RegExp('('+Object.keys(SPR).join('|')+')\uFE0F?','g');
 function E(x){return String(x).replace(RE,function(m,k){return sv(k)})}
 var $=function(s){return document.querySelector(s)};
-var P=[{id:'egg',n:'Яйцо',e:'🥚',sell:8,lvl:1},{id:'milk',n:'Молоко',e:'🥛',sell:20,lvl:4},{id:'wool',n:'Шерсть',e:'🧶',sell:35,lvl:5},{id:'bacon',n:'Бекон',e:'🥓',sell:60,lvl:6}];
+var P=[{id:'egg',n:'Яйцо',e:'🥚',sell:8,lvl:1},{id:'milk',n:'Молоко',e:'🥛',sell:20,lvl:4},{id:'wool',n:'Шерсть',e:'🧶',sell:35,lvl:5},{id:'bacon',n:'Бекон',e:'🥓',sell:60,lvl:6},{id:'meat',n:'Мясо',e:'🥩',sell:55,lvl:7},{id:'fish',n:'Рыба',e:'🐟',sell:70,lvl:6}];
 var byId=function(id){return C.concat(P).filter(function(c){return c.id===id})[0]};
 function fresh(){return{coins:30,xp:0,inv:{},plots:[null,null,null,null,null,null,null,null,null],unlocked:4,cap:20,orders:[],sel:'wheat'}}
 function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){S=null}if(!S||!S.plots)S=fresh();
@@ -555,7 +559,7 @@ function buyShop(k,kind){
 function buyFert(){var c=mer().on?25:40;if(S.coins<c)return toast('Не хватает монет');S.coins-=c;S.fert++;save();paint()}
 function petWork(){
   if(!S.pet)return;var n=Date.now(),ch=0;
-  S.pen.forEach(function(t,i){var a=ANIM[i];if(t&&n>=t+a.time*1000&&used()<capN()){S.inv[a.item]=(S.inv[a.item]||0)+1;S.pen[i]=n;qp('animal',1);ch=1}});
+  S.pen.forEach(function(t,i){var a=ANIM[i];if(t&&n>=t+a.time*1000&&used()<capN()){S.inv[a.item]=(S.inv[a.item]||0)+1;if(a.item2)S.inv[a.item2]=(S.inv[a.item2]||0)+1;S.pen[i]=n;qp('animal',1);ch=1}});
   if(ch){save();if(tab==='pen'||tab==='barn')paint()}
 }
 var FOX=0;
@@ -581,7 +585,7 @@ function viewProfile(){
 }
 document.addEventListener('change',function(e){if(e.target.id==='nm'){S.name=e.target.value.slice(0,12);save();topLoad()}});
 $('#prof').addEventListener('click',function(){tab='profile';paint()});
-var ANIM=[{n:'Курица',e:'🐔',item:'egg',time:40,buy:0,lvl:1,k:'hen'},{n:'Курица 2',e:'🐔',item:'egg',time:40,buy:60,lvl:2,k:'hen'},{n:'Корова',e:'🐄',item:'milk',time:90,buy:150,lvl:4,k:'cow'},{n:'Овца',e:'🐑',item:'wool',time:150,buy:300,lvl:5,k:'sheep'},{n:'Свинья',e:'🐖',item:'bacon',time:240,buy:500,lvl:6,k:'pig'}];
+var ANIM=[{n:'Курица',e:'🐔',item:'egg',time:40,buy:0,lvl:1,k:'hen'},{n:'Курица 2',e:'🐔',item:'egg',time:40,buy:60,lvl:2,k:'hen'},{n:'Корова',e:'🐄',item:'milk',time:90,buy:150,lvl:4,k:'cow'},{n:'Овца',e:'🐑',item:'wool',time:150,buy:300,lvl:5,k:'sheep'},{n:'Свинья',e:'🐖',item:'bacon',time:240,buy:500,lvl:6,k:'pig'},{n:'Кролик',e:'🐇',item:'meat',item2:'carrot',time:300,buy:650,lvl:7,k:'rabbit'},{n:'Индюк',e:'🦃',item:'meat',item2:'pumpkin',time:420,buy:900,lvl:9,k:'turkey'},{n:'Утка',e:'🦆',item:'meat',item2:'apple',time:600,buy:1400,lvl:11,k:'duck'}];
 var BON=[20,30,40,60,80,100,200];
 var QT=[{k:'harvest',t:'Соберите урожай',n:[4,6,8]},{k:'plant',t:'Посадите культуры',n:[5,8,12]},{k:'deliver',t:'Выполните заказы',n:[1,2]},{k:'sell',t:'Продайте товары',n:[4,6,10]},{k:'animal',t:'Соберите продукты со двора',n:[2,3]},{k:'bake',t:'Испеките выпечку',n:[1,2]}];
 function two(n){return n<10?'0'+n:''+n}
@@ -593,7 +597,7 @@ function daily(){if(S.qd!==today()){S.qd=today();S.quests=genQ();save()}if(!S.fa
 function qp(k,n){sp(k,n);S.ac[k]=(S.ac[k]||0)+n;S.quests.forEach(function(q){if(q.k===k&&!q.done)q.p=Math.min(q.need,q.p+n)})}
 function claimBonus(){if(S.claimed===today())return;S.streak=S.claimed===yday()?S.streak+1:1;S.claimed=today();var r=BON[(S.streak-1)%7];S.coins+=r;addXp(2);toast('Награда дня: +'+r+' 🪙');qp('bonus',1);save();paint()}
 function claimQ(k){var q=S.quests[k];if(q.done||q.p<q.need)return;q.done=1;S.coins+=q.r;addXp(3);toast('Задание: +'+q.r+' 🪙');save();paint()}
-function collect(i){var a=ANIM[i];if(used()+1>capN())return toast('Амбар полон — продайте товар');S.inv[a.item]=(S.inv[a.item]||0)+1;S.pen[i]=Date.now();addXp(2);qp('animal',1);toast('+1 '+byId(a.item).e);save();paint()}
+function collect(i){var a=ANIM[i];if(used()+(a.item2?2:1)>capN())return toast('Амбар полон — продайте товар');S.inv[a.item]=(S.inv[a.item]||0)+1;if(a.item2)S.inv[a.item2]=(S.inv[a.item2]||0)+1;S.pen[i]=Date.now();addXp(2);qp('animal',1);toast('+1 '+byId(a.item).e+(a.item2?' +1 '+byId(a.item2).e:''));save();paint()}
 function buyAnim(i){var a=ANIM[i];if(S.coins<a.buy)return toast('Нужно '+a.buy+' 🪙');S.coins-=a.buy;S.pen[i]=Date.now();toast(a.n+' на дворе!');save();paint()}
 var SPEEDK=0.25;/* монет за секунду ускорения */
 function speedCost(left){return Math.max(2,Math.ceil(left*SPEEDK))}
@@ -612,10 +616,10 @@ function viewPen(){
   return'<h2>Двор</h2><canvas id="pen" width="512" height="300" aria-label="Двор с животными"></canvas>'+ANIM.map(function(a,i){
     if(!S.pen[i]){
       var lk=a.lvl>lvl();
-      return'<div class="card"><div class="t">'+a.e+' '+a.n+'<div class="r">'+(lk?'Откроется на уровне '+a.lvl:'Купить за '+a.buy+' 🪙 · даёт '+byId(a.item).e)+'</div></div>'+(lk?'':'<button class="btn alt" data-buy="'+i+'">Купить</button>')+'</div>'
+      return'<div class="card"><div class="t">'+a.e+' '+a.n+'<div class="r">'+(lk?'Откроется на уровне '+a.lvl:'Купить за '+a.buy+' 🪙 · даёт '+byId(a.item).e+(a.item2?' + '+byId(a.item2).e:''))+'</div></div>'+(lk?'':'<button class="btn alt" data-buy="'+i+'">Купить</button>')+'</div>'
     }
     var rt=S.pen[i]+a.time*1000,it=byId(a.item),rd=Date.now()>=rt;
-    return'<div class="card"><div class="t">'+a.e+' '+a.n+'<div class="r">Даёт '+it.e+' '+it.n+'</div>'+(rd?'':'<div class="r">Ещё <span data-ts="'+rt+'"></span></div>')+'</div>'+(rd?'<button class="btn" data-col="'+i+'">Собрать</button>':speedBtns('a',i,rt))+'</div>'
+    return'<div class="card"><div class="t">'+a.e+' '+a.n+'<div class="r">Даёт '+it.e+' '+it.n+(a.item2?' + '+byId(a.item2).e+' '+byId(a.item2).n:'')+'</div>'+(rd?'':'<div class="r">Ещё <span data-ts="'+rt+'"></span></div>')+'</div>'+(rd?'<button class="btn" data-col="'+i+'">Собрать</button>':speedBtns('a',i,rt))+'</div>'
   }).join('')
 }
 function viewDaily(){
@@ -634,7 +638,8 @@ function tickTs(no){
 }
 function alerts(){
   var n=Date.now(),a={
-    farm:S.plots.some(function(p,i){var s=i<S.unlocked&&plotState(p);return s&&s.ready}),
+    farm:S.plots.some(function(p,i){var s=i<S.unlocked&&plotState(p);return s&&s.ready})||S.obj.some(function(o){return o.k==='pond'&&pondReady(o)}),
+    mail:(typeof MAILN!=='undefined'&&MAILN>0),
     pen:S.pen.some(function(t,i){return t&&n>=t+ANIM[i].time*1000})||!!(S.oven&&n>=S.oven.t+BAKE[S.oven.r].time*1000),
     barn:mer().on&&used()>0,orders:S.orders.some(function(o){for(var id in o.items)if((S.inv[id]||0)<o.items[id])return false;return true}),
     daily:S.claimed!==today()||S.quests.some(function(q){return!q.done&&q.p>=q.need})
@@ -673,7 +678,7 @@ function viewBarn(){
 }
 function paint(){
   setMH();paintHead();
-  daily();$('#view').innerHTML=E(tab==='farm'?viewFarm():tab==='orders'?viewOrders():tab==='pen'?viewPen()+viewOven():tab==='daily'?viewDaily():tab==='shop'?viewDonate():tab==='build'?viewBuild():tab==='worlds'?viewWorlds():tab==='farms'?viewFarms():tab==='visit'?viewVisit():tab==='profile'?viewProfile():tab==='town'?viewTown():tab==='top'?viewTop():tab==='credits'?viewCredits():viewBarn());alerts();tickTs(1);renderHen();
+  daily();$('#view').innerHTML=E(tab==='farm'?viewFarm():tab==='orders'?viewOrders():tab==='pen'?viewPen()+viewOven():tab==='daily'?viewDaily():tab==='shop'?viewDonate():tab==='build'?viewBuild():tab==='worlds'?viewWorlds():tab==='mail'?viewMail():tab==='farms'?viewFarms():tab==='visit'?viewVisit():tab==='profile'?viewProfile():tab==='town'?viewTown():tab==='top'?viewTop():tab==='credits'?viewCredits():viewBarn());alerts();tickTs(1);renderHen();
   if(tab==='farm'){tick(true);initMap()}else if(tab==='visit')initMap();else if(tab==='pen')initPen();var fb=$('#fab');if(fb){fb.classList.toggle('on',bxm()>1||vipOn());fb.querySelector('i').textContent=bxm()>1?'×'+S.bx.m:vipOn()?'VIP':''}
 }
 function tick(force){
@@ -785,12 +790,12 @@ function drawPlots(g,now){
 function mkE(t,a,v){var e={t:t,a:a,v:v||0,x:a[0]+Math.random()*(a[2]-a[0]),y:a[1]+Math.random()*(a[3]-a[1]),wait:Math.random()*2000,d:Math.random()<.5?1:-1,fa:0,f:0,mv:0};e.tx=e.x;e.ty=e.y;return e}
 function initEnt(){
   ENT=[mkE('hen',[346,190,486,274],0),mkE('hen',[346,190,486,274],1),
-  mkE('cow',[190,500,420,720]),mkE('sheep',[190,500,420,720]),mkE('pig',[190,500,420,720]),
+  mkE('cow',[190,500,420,720]),mkE('sheep',[190,500,420,720]),mkE('pig',[190,500,420,720]),mkE('rabbit',[190,500,420,720]),mkE('turkey',[190,500,420,720]),mkE('duck',[190,500,420,720]),
   mkE('cat',[344,140,420,160]),mkE('dog',[330,440,500,452]),
   mkE('farmer',[0,0,0,0]),mkE('farmer',[0,0,0,0]),mkE('farmer',[0,0,0,0]),mkE('farmer',[0,0,0,0])];
   var f=ENT.slice(-4);f[0].x=304;f[0].y=60;f[1].x=300;f[1].y=300;f[2].x=120;f[2].y=416;f[3].x=420;f[3].y=412;f.forEach(function(e){e.tx=e.x;e.ty=e.y})
 }
-function showE(e){var t=e.t;if(t==='hen')return !!S.pen[e.v];if(t==='cow')return !!S.pen[2];if(t==='sheep')return !!S.pen[3];if(t==='pig')return !!S.pen[4];if(t==='cat')return !!S.pet;if(t==='dog')return !!S.dog;return true}
+function showE(e){var t=e.t;if(t==='hen')return !!S.pen[e.v];if(t==='cow')return !!S.pen[2];if(t==='sheep')return !!S.pen[3];if(t==='pig')return !!S.pen[4];if(t==='rabbit')return !!S.pen[5];if(t==='turkey')return !!S.pen[6];if(t==='duck')return !!S.pen[7];if(t==='cat')return !!S.pet;if(t==='dog')return !!S.dog;return true}
 function farmTarget(e){
   var nearJ=e.x>=282&&e.x<=326&&e.y>=396,onV=e.x>=282&&e.x<=326&&e.y<400,r=Math.random();
   if(onV){if(r<.3){e.tx=304;e.ty=416}else{e.tx=296+Math.random()*16;e.ty=16+Math.random()*380}}
@@ -799,7 +804,7 @@ function farmTarget(e){
 }
 function updE(dt,LST){
   (LST||ENT).forEach(function(e){
-    var sp={hen:20,cow:12,sheep:10,pig:12,cat:16,dog:36,farmer:30}[e.t]||WSP[e.t],dx,dy,dist;
+    var sp={hen:20,cow:12,sheep:10,pig:12,rabbit:24,turkey:13,duck:15,cat:16,dog:36,farmer:30}[e.t]||WSP[e.t],dx,dy,dist;
     if(e.wait>0){e.wait-=dt;e.mv=0;if(e.wait<=0){if(e.t==='farmer')farmTarget(e);else{e.tx=e.a[0]+Math.random()*(e.a[2]-e.a[0]);e.ty=e.a[1]+Math.random()*(e.a[3]-e.a[1])}}return}
     dx=e.tx-e.x;dy=e.ty-e.y;dist=Math.sqrt(dx*dx+dy*dy);
     if(dist<2){e.wait=(e.t==='farmer'?300:1200)+Math.random()*2800;e.mv=0;return}
@@ -910,12 +915,12 @@ function drawMap(now){
   var g=MG,dt=Math.min(100,MLAST?now-MLAST:80),i,L=[];MLAST=now;
   g.drawImage(BG,0,0);
   drawPlots(g,now);
-  S.obj.forEach(function(o){var q=OBJ_BY[o.k];if(q)L.push([o.y*16+q.h*16-1,function(){q.d(g,o.x*16,o.y*16,q.w,q.h,now)}])});
+  S.obj.forEach(function(o){var q=OBJ_BY[o.k];if(q)L.push([o.y*16+q.h*16-1,function(){q.d(g,o.x*16,o.y*16,q.w,q.h,now);if(o.k==='pond')pondFx(g,o,now)}])});
   var WL=wildList();updE(dt,WL);
   WL.forEach(function(e){L.push([e.fly?5000+e.y:e.y,function(){WDRAW[e.t](g,e.x,e.y,e.d,e.mv?e.f:0,now,e)}])});
   updE(dt);CART.x+=dt*.045;if(CART.x>620)CART.x=-90;CARTX=CART.x;
   ENT.forEach(function(e){if(!showE(e))return;L.push([e.y,function(){
-    if(e.t==='hen')dHen(g,e.x,e.y,e.d,e.mv?e.f:0,e.v);else if(e.t==='cow')dCow(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='sheep')dSheep(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='pig')dPig(g,e.x,e.y,e.d,e.mv?e.f:0);
+    if(e.t==='hen')dHen(g,e.x,e.y,e.d,e.mv?e.f:0,e.v);else if(e.t==='cow')dCow(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='sheep')dSheep(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='pig')dPig(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='rabbit')dRabbit(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='turkey')dTurkey(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='duck')dDuck(g,e.x,e.y,e.d,e.mv?e.f:0);
     else if(e.t==='farmer')dFarmer(g,e.x,e.y,e.d,e.f,e.mv,e);else if(e.t==='cat')dCat(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='dog')dDog(g,e.x,e.y,e.d,e.mv?e.f:0)}])});
   L.push([424,function(){dCart(g,CART.x,424,((now/200)|0)%2)}]);
   L.sort(function(a,b){return a[0]-b[0]});L.forEach(function(q){q[1]()});
@@ -924,7 +929,7 @@ function drawMap(now){
   tag(g,'Амбар',412,148);tag(g,'Двор',416,172);tag(g,'Город',388,392);tag(g,'Заказы',Math.max(40,Math.min(472,CART.x+10)),372);tag(g,'Выпас',336,474);
   var n=Date.now();
   if(S.pen[0]&&n>=S.pen[0]+ANIM[0].time*1000||S.pen[1]&&n>=S.pen[1]+ANIM[1].time*1000)bubble(g,416,152,'🥚',now);
-  ENT.forEach(function(e){var s=({cow:2,sheep:3,pig:4})[e.t];if(s&&S.pen[s]&&n>=S.pen[s]+ANIM[s].time*1000)bubble(g,e.x,e.y-34,byId(ANIM[s].item).e,now)});
+  ENT.forEach(function(e){var s=({cow:2,sheep:3,pig:4,rabbit:5,turkey:6,duck:7})[e.t];if(s&&S.pen[s]&&n>=S.pen[s]+ANIM[s].time*1000)bubble(g,e.x,e.y-34,byId(ANIM[s].item).e,now)});
   var fx=wxType();if(fx==='snow'){R(g,'rgba(220,235,255,.18)',0,0,MW,MH);for(i=0;i<70;i++){var sx=(i*61+Math.sin(now*.001+i)*14+now*.01)%MW,sy=(i*89+now*.06)%MH;R(g,'#fff',sx|0,sy|0,3,3)}}else if(fx==='sun'){R(g,'rgba(255,214,90,.16)',0,0,MW,MH)}else if(fx==='storm'){R(g,'rgba(20,25,50,.35)',0,0,MW,MH);if((now|0)%2400<120)R(g,'rgba(255,255,255,.35)',0,0,MW,MH)}
   if(rainSlot().on){R(g,'rgba(40,70,110,.2)',0,0,MW,MH);for(i=0;i<80;i++){var rx=(i*53+now*.05)%MW,ry=(i*97+now*.45)%MH;R(g,'#cfe9ff',rx|0,ry|0,1,7)}}
 }
@@ -933,7 +938,8 @@ function mapClick(e){
   if(tab==='visit')return;
   var r=MC.getBoundingClientRect(),x=(e.clientX-r.left)*MW/r.width,y=(e.clientY-r.top)*MH/r.height,i,q;
   if(BLD&&BLD.mode==='place')return bldTap(x,y);
-  if(y>=MH0){i=objAt(x,y);if(i>=0){BLD={mode:'sel',i:i};return bldUpdate()}if(BLD){BLD=null;bldUpdate()}return}
+  i=objAt(x,y);if(i>=0){BLD={mode:'sel',i:i};return bldUpdate()}
+  if(y>=MH0){if(BLD){BLD=null;bldUpdate()}return}
   if(BLD){BLD=null;bldUpdate()}
   for(i=0;i<9;i++){q=plotXY(i);if(inR(x,y,q[0],q[1],64,64))return tapPlot(i)}
   if(inR(x,y,CARTX-56,380,100,52)){tab='orders';return paint()}
@@ -991,6 +997,29 @@ function dPig(g,x,y,d,f){g.save();g.translate(Math.round(x),Math.round(y));g.sca
   R(g,'#d9768a',20,-18,6,7);R(g,'#2b1b12',21,-15,1,2);R(g,'#2b1b12',24,-15,1,2);R(g,'#2b1b12',17,-20,2,2);
   R(g,'#3a2417',-17,-21,4,4);R(g,'#f4a6b0',-16,-20,2,2);
   var o=f?2:0;R(g,'#c86a7c',-10,-5,5,5-o);R(g,'#c86a7c',-3,-5,5,3+o);R(g,'#c86a7c',5,-5,5,5-o);R(g,'#c86a7c',10,-5,4,3+o);g.restore()}
+function dRabbit(g,x,y,d,f){g.save();g.translate(Math.round(x),Math.round(y));g.scale(d,1);
+  R(g,'rgba(0,0,0,.2)',-10,-2,22,4);
+  R(g,'#3a2417',-11,-15,22,13);R(g,'#ece7df',-10,-14,20,11);R(g,'#cfc8bd',-10,-6,20,3);
+  R(g,'#3a2417',-15,-11,6,7);R(g,'#ffffff',-14,-10,4,5);
+  R(g,'#3a2417',7,-21,11,11);R(g,'#f5f1ea',8,-20,9,9);
+  R(g,'#3a2417',9,-33,5,13);R(g,'#f5f1ea',10,-32,3,11);R(g,'#f4a6b0',11,-30,1,7);
+  R(g,'#3a2417',15,-32,5,12);R(g,'#f5f1ea',16,-31,3,10);R(g,'#f4a6b0',17,-29,1,6);
+  R(g,'#2b1b12',14,-17,2,2);R(g,'#f4a6b0',17,-14,2,2);
+  var o=f?2:0;R(g,'#cfc8bd',-8,-4,5,4-o);R(g,'#cfc8bd',4,-4,6,2+o);g.restore()}
+function dTurkey(g,x,y,d,f){g.save();g.translate(Math.round(x),Math.round(y));g.scale(d,1);
+  R(g,'rgba(0,0,0,.2)',-12,-2,26,4);
+  R(g,'#3a2417',-18,-30,16,22);R(g,'#b8531f',-17,-29,14,20);R(g,'#e3a02a',-15,-27,10,16);R(g,'#2f8f5a',-13,-24,6,10);
+  R(g,'#3a2417',-12,-20,25,17);R(g,'#7a4a24',-11,-19,23,15);R(g,'#5e3a1e',-6,-14,12,5);R(g,'#9a6232',-9,-18,10,3);
+  R(g,'#3a2417',10,-31,9,16);R(g,'#7a4a24',11,-30,7,14);
+  R(g,'#3a2417',12,-37,9,9);R(g,'#8fb6d9',13,-36,7,7);R(g,'#2b1b12',17,-34,2,2);
+  R(g,'#e0a020',20,-33,4,3);R(g,'#d9442e',19,-30,3,6);
+  var o=f?2:0;R(g,'#e0a020',-5,-3,3,3-o);R(g,'#e0a020',4,-3,3,1+o);g.restore()}
+function dDuck(g,x,y,d,f){g.save();g.translate(Math.round(x),Math.round(y));g.scale(d,1);
+  R(g,'rgba(0,0,0,.2)',-10,-2,22,4);
+  R(g,'#3a2417',-12,-15,23,13);R(g,'#f7f3e6',-11,-14,21,11);R(g,'#d8d2bc',-10,-7,19,4);R(g,'#b9a16a',-13,-15,5,6);
+  R(g,'#3a2417',6,-25,10,12);R(g,'#2e9a5a',7,-24,8,10);R(g,'#fff',7,-16,8,2);
+  R(g,'#2b1b12',12,-22,2,2);R(g,'#3a2417',14,-20,8,5);R(g,'#f28a1c',15,-19,6,3);
+  var o=f?2:0;R(g,'#f28a1c',-6,-3,4,3-o);R(g,'#f28a1c',3,-3,4,1+o);g.restore()}
 var PA=[40,100,472,262],PE={},PSIG='',PBG=null,PMC=null,PMG=null,PMT=0,PMLAST=0;
 function buildPBG(){PBG=mk(512,300,function(g){
   var r=rng(7),x,y;R(g,'#6cc24a',0,0,512,300);
@@ -1003,7 +1032,7 @@ function buildPBG(){PBG=mk(512,300,function(g){
 function penSync(){var sig='';ANIM.forEach(function(a,i){sig+=S.pen[i]?1:0});if(sig===PSIG)return;PSIG=sig;
   ANIM.forEach(function(a,i){if(S.pen[i]){if(!PE[i]){var e=mkE(a.k,PA,i);e.slot=i;PE[i]=e}}else delete PE[i]})}
 function drawAnimal(g,e){var f=e.mv?e.f:0,t=e.t;
-  if(t==='hen')dHen(g,e.x,e.y,e.d,f,e.v);else if(t==='cow')dCow(g,e.x,e.y,e.d,f);else if(t==='sheep')dSheep(g,e.x,e.y,e.d,f);else if(t==='pig')dPig(g,e.x,e.y,e.d,f)}
+  if(t==='hen')dHen(g,e.x,e.y,e.d,f,e.v);else if(t==='cow')dCow(g,e.x,e.y,e.d,f);else if(t==='sheep')dSheep(g,e.x,e.y,e.d,f);else if(t==='pig')dPig(g,e.x,e.y,e.d,f);else if(t==='rabbit')dRabbit(g,e.x,e.y,e.d,f);else if(t==='turkey')dTurkey(g,e.x,e.y,e.d,f);else if(t==='duck')dDuck(g,e.x,e.y,e.d,f)}
 function drawPen(now){
   if(!PBG)buildPBG();penSync();
   var g=PMG,dt=Math.min(100,PMLAST?now-PMLAST:80),L=[],list=[],n=Date.now(),k;PMLAST=now;
@@ -1111,7 +1140,7 @@ var OBJ=[
  {id:'bench',n:'Скамейка',w:2,h:1,cost:90,lvl:3,d:oBench,g:'farm'},{id:'lamp',n:'Фонарь',w:1,h:2,cost:110,lvl:4,d:oLamp,g:'farm'},
  {id:'scare',n:'Пугало',w:1,h:2,cost:300,lvl:4,d:oScare,g:'farm',b:{xp:.03},max:3,tip:'опыт +3%'},
  {id:'well',n:'Колодец',w:2,h:2,cost:450,lvl:5,d:oWell,g:'farm',b:{speed:.04},max:3,tip:'рост +4%'},
- {id:'pond',n:'Прудик',w:3,h:2,cost:600,lvl:6,d:oPond,g:'farm'},{id:'silo',n:'Силос',w:2,h:3,cost:900,lvl:7,d:oSilo,g:'farm',cap:10,max:3,tip:'амбар +10 мест'},
+ {id:'pond',n:'Прудик',w:3,h:2,cost:600,lvl:6,d:oPond,g:'farm',tip:'🐟 разводи рыбу'},{id:'silo',n:'Силос',w:2,h:3,cost:900,lvl:7,d:oSilo,g:'farm',cap:10,max:3,tip:'амбар +10 мест'},
  {id:'statue',n:'Статуя',w:2,h:2,cost:2500,lvl:12,d:oStatue,g:'farm'},{id:'mill',n:'Мельница',w:3,h:3,cost:5000,lvl:15,d:oMill,g:'farm',b:{coins:.05},max:2,tip:'монеты +5%'},
  {id:'reeds',n:'Камыш',w:1,h:1,cost:40,lvl:10,d:oReeds,g:'swamp'},{id:'mush',n:'Грибы',w:1,h:1,cost:70,lvl:10,d:oMush,g:'swamp'},
  {id:'dead',n:'Коряга',w:2,h:2,cost:180,lvl:10,d:oDead,g:'swamp'},{id:'lily',n:'Болотце',w:3,h:2,cost:420,lvl:10,d:oLily,g:'swamp',b:{xp:.03},max:2,tip:'опыт +3%'},
@@ -1126,39 +1155,42 @@ function objCount(k,st){st=st||S;var n=0;(st.obj||[]).forEach(function(o){if(o.k
 function objM(k){var m=1;S.obj.forEach(function(o){var d=OBJ_BY[o.k];if(d&&d.b&&d.b[k])m+=d.b[k]});return m}
 function capN(){var c=S.cap;S.obj.forEach(function(o){var d=OBJ_BY[o.k];if(d&&d.cap)c+=d.cap});return c}
 function oPrev(o){return OPREV[o.id]||(OPREV[o.id]=mk(o.w*16+8,o.h*16+8,function(g){o.d(g,4,4,o.w,o.h,0)}).toDataURL())}
+/* занятые места основной территории (поле, дороги, амбар, двор, лавка, пруд, загон) — всё остальное можно застраивать */
+var BLK=[[0,56,296,338],[286,0,34,440],[0,398,512,38],[326,0,186,150],[326,150,180,160],[330,300,124,96],[0,462,152,198],[0,712,170,56],[168,450,24,300],[486,450,26,300],[168,450,344,32],[168,726,344,26],[448,500,68,44],[424,708,64,22]];
 function cellOk(col,row,w,h,ign){
-  if(col<0||row<BASEROW||col+w>32||row+h>BASEROW+landRows())return false;
+  if(col<0||row<0||col+w>32||row+h>BASEROW+landRows())return false;
+  if(row<BASEROW){var x0=col*16,y0=row*16,x1=x0+w*16,y1=y0+h*16;for(var k=0;k<BLK.length;k++){var b=BLK[k];if(x0<b[0]+b[2]&&x1>b[0]&&y0<b[1]+b[3]&&y1>b[1])return false}}
   for(var i=0;i<S.obj.length;i++){var o=S.obj[i],d=OBJ_BY[o.k];if(!d||o===ign)continue;if(col<o.x+d.w&&col+w>o.x&&row<o.y+d.h&&row+h>o.y)return false}
   return true}
-function findFree(d,ign){for(var r=BASEROW;r+d.h<=BASEROW+landRows();r++)for(var c=0;c+d.w<=32;c++)if(cellOk(c,r,d.w,d.h,ign))return[c,r];return null}
+function findFree(d,ign){var r,c;for(r=BASEROW;r+d.h<=BASEROW+landRows();r++)for(c=0;c+d.w<=32;c++)if(cellOk(c,r,d.w,d.h,ign))return[c,r];for(r=0;r<BASEROW;r++)for(c=0;c+d.w<=32;c++)if(cellOk(c,r,d.w,d.h,ign))return[c,r];return null}
 function buyObj(k){var o=OBJ_BY[k];if(!o)return;
   if(lvl()<o.lvl)return toast('Нужен '+o.lvl+' уровень');
   if(o.max&&objCount(k)>=o.max)return toast('Больше нельзя: максимум '+o.max);
   if(S.coins<o.cost)return toast('Не хватает монет: '+o.cost+' 🪙');
   var f=findFree(o);if(!f)return toast('Нет места — расширьте землю');
   BLD={mode:'place',k:k,buy:1,col:f[0],row:f[1],ok:1};tab='farm';paint();scrollLand()}
-function scrollLand(){setTimeout(function(){var m=$('main');if(m)m.scrollTop=m.scrollHeight},80)}
+function scrollLand(){setTimeout(function(){var m=$('main'),c=$('#map');if(!m)return;if(BLD&&BLD.row!==undefined&&c){var r=c.getBoundingClientRect(),mr=m.getBoundingClientRect(),y=(BLD.row*16)/MH*r.height+(r.top-mr.top)+m.scrollTop;m.scrollTop=Math.max(0,y-mr.height/3)}else m.scrollTop=m.scrollHeight},80)}
 function bldBar(){
   var h='',d;
   if(BLD&&BLD.mode==='place'){d=OBJ_BY[BLD.k];h='<div class="bld"><b>'+d.n+'</b>'+(BLD.buy?' · '+d.cost+' 🪙':'')+'<div class="r">Нажмите на карту, чтобы выбрать место. Зелёное — можно, красное — занято.</div><div class="br"><button class="btn" data-bok="1"'+(BLD.ok?'':' disabled')+'>✔ Поставить</button><button class="btn alt" data-bcn="1">Отмена</button></div></div>'}
-  else if(BLD&&BLD.mode==='sel'){var o=S.obj[BLD.i];d=o&&OBJ_BY[o.k];if(d)h='<div class="bld"><b>'+d.n+'</b><div class="br"><button class="btn" data-bmv="1">Переместить</button><button class="btn alt" data-bsl="1">Продать +'+Math.floor(d.cost/2)+' 🪙</button><button class="btn alt" data-bcn="1">Закрыть</button></div></div>'}
+  else if(BLD&&BLD.mode==='sel'){var o=S.obj[BLD.i];d=o&&OBJ_BY[o.k];if(d)h='<div class="bld"><b>'+d.n+'</b><div class="br">'+(d.id==='pond'?'<button class="btn" data-pond="1">🐟 Пруд</button>':d.id==='mail'?'<button class="btn" data-mailopen="1">💌 Почта</button>':'')+'<button class="btn" data-bmv="1">Переместить</button><button class="btn alt" data-bsl="1">Продать +'+Math.floor(d.cost/2)+' 🪙</button><button class="btn alt" data-bcn="1">Закрыть</button></div></div>'}
   return'<div id="bldw">'+h+'</div>'}
 function bldUpdate(){var w=$('#bldw');if(w)w.outerHTML=E(bldBar())}
 function bldConfirm(){if(!BLD||BLD.mode!=='place'||!BLD.ok)return;var d=OBJ_BY[BLD.k];
   if(BLD.buy){if(S.coins<d.cost)return toast('Не хватает монет');S.coins-=d.cost;S.obj.push({k:BLD.k,x:BLD.col,y:BLD.row});toast('Поставлено: '+d.n)}
   else{BLD.mov.x=BLD.col;BLD.mov.y=BLD.row}
   BLD=null;save();paint()}
-function bldSell(){if(!BLD||BLD.mode!=='sel')return;var o=S.obj[BLD.i],d=o&&OBJ_BY[o.k];if(!d)return;S.coins+=Math.floor(d.cost/2);S.obj.splice(BLD.i,1);toast('Продано: '+d.n+' · +'+Math.floor(d.cost/2)+' 🪙');BLD=null;save();paint()}
+function bldSell(){if(!BLD||BLD.mode!=='sel')return;var o=S.obj[BLD.i],d=o&&OBJ_BY[o.k];if(!d)return;if(o.f&&o.f.length)return toast('В пруду ещё есть рыба — сначала выловите');S.coins+=Math.floor(d.cost/2);S.obj.splice(BLD.i,1);toast('Продано: '+d.n+' · +'+Math.floor(d.cost/2)+' 🪙');BLD=null;save();paint()}
 function bldMove(){if(!BLD||BLD.mode!=='sel')return;var o=S.obj[BLD.i];BLD={mode:'place',k:o.k,mov:o,col:o.x,row:o.y,ok:1};paint();scrollLand()}
 function bldTap(x,y){
   var d=OBJ_BY[BLD.k],col=Math.round(x/16-d.w/2),row=Math.round(y/16-d.h/2);
-  col=Math.max(0,Math.min(32-d.w,col));row=Math.max(BASEROW,Math.min(BASEROW+landRows()-d.h,row));
+  col=Math.max(0,Math.min(32-d.w,col));row=Math.max(0,Math.min(BASEROW+landRows()-d.h,row));
   BLD.col=col;BLD.row=row;BLD.ok=cellOk(col,row,d.w,d.h,BLD.mov)?1:0;bldUpdate()}
 function objAt(x,y){for(var i=S.obj.length-1;i>=0;i--){var o=S.obj[i],d=OBJ_BY[o.k];if(d&&x>=o.x*16&&x<(o.x+d.w)*16&&y>=o.y*16-8&&y<(o.y+d.h)*16)return i}return-1}
 function bldDraw(g,now){
   if(tab==='visit'||!BLD||BLD.mode!=='place')return;
   var d=OBJ_BY[BLD.k],x,y;g.fillStyle='rgba(255,255,255,.14)';
-  for(x=0;x<=32;x++)g.fillRect(x*16,BASEROW*16,1,landRows()*16);for(y=0;y<=landRows();y++)g.fillRect(0,(BASEROW+y)*16,MW,1);
+  for(x=0;x<=32;x++)g.fillRect(x*16,0,1,(BASEROW+landRows())*16);for(y=0;y<=BASEROW+landRows();y++)g.fillRect(0,y*16,MW,1);g.fillStyle='rgba(110,0,0,.26)';BLK.forEach(function(b){g.fillRect(b[0],b[1],b[2],b[3])});g.fillStyle='rgba(255,255,255,.14)';
   g.fillStyle=BLD.ok?'rgba(80,230,90,.38)':'rgba(240,60,60,.42)';g.fillRect(BLD.col*16,BLD.row*16,d.w*16,d.h*16);
   g.globalAlpha=.85;d.d(g,BLD.col*16,BLD.row*16,d.w,d.h,now);g.globalAlpha=1}
 function expandCost(){return LAND_COST[S.ld||0]}
@@ -1169,6 +1201,7 @@ function expandLand(){var l=S.ld||0;if(l>=LAND_COST.length)return toast('Вся 
 function viewBuild(){
   var l=S.ld||0,h='<h2>🏗 Стройка</h2>',cells=32*landRows();
   h+='<div class="card"><div class="t">🌿 Участок: '+cells+' клеток · '+S.obj.length+' построек<div class="r">'+(l<LAND_COST.length?'Расширение +8 рядов: '+LAND_COST[l]+' 🪙 · с '+LAND_LVL[l]+' ур.':'Вся земля куплена')+'</div></div>'+(l<LAND_COST.length?'<button class="btn alt" data-bex="1"'+(lvl()<LAND_LVL[l]?' disabled':'')+'>Расширить</button>':'')+'</div>';
+  h+='<p class="empty" style="margin:0 0 10px">Ставить можно на купленной земле внизу и на свободных местах по всей ферме. При выборе места красным подсвечено то, что занято.</p>';
   var groups=[['farm','🌱 Ферма'],['swamp','🐸 Болото'],['future','🚀 Будущее'],['dino','🦖 Динозавры']];
   groups.forEach(function(gr){
     var list=OBJ.filter(function(o){return o.g===gr[0]});if(!list.length)return;
@@ -1181,7 +1214,7 @@ function viewBuild(){
 
 /* ===== ПРОСМОТР ЧУЖИХ ФЕРМ ===== */
 var FARMS=null,FLOAD=0,VS=null,VINFO=null;
-function farmsLoad(){if(!API||FLOAD)return;FLOAD=1;fetch(API+'/farms').then(function(r){return r.json()}).then(function(a){FARMS=Array.isArray(a)?a:[];FLOAD=0;if(tab==='farms')paint()}).catch(function(){FLOAD=0;FARMS=FARMS||[];if(tab==='farms')paint()})}
+function farmsLoad(){if(!API||FLOAD)return;FLOAD=1;fetch(API+'/farms').then(function(r){return r.json()}).then(function(a){FARMS=Array.isArray(a)?a:[];FLOAD=0;if(tab==='farms'||tab==='mail')paint()}).catch(function(){FLOAD=0;FARMS=FARMS||[];if(tab==='farms'||tab==='mail')paint()})}
 function viewFarms(){
   var h='<h2>🏡 Фермы игроков</h2>';if(FARMS===null&&!API)FARMS=[];
   if(FARMS===null){farmsLoad();return h+'<p class="empty">Загружаю…</p><button class="btn" data-tab="farm" style="width:100%">К ферме</button>'}
@@ -1197,13 +1230,13 @@ function stFromSnap(sn,xp){
 function visitFarm(id){
   if(!API)return toast('Нет связи с сервером');
   fetch(API+'/farm?id='+encodeURIComponent(id)).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(f){
-    if(!f||!f.snap)throw 0;VS=stFromSnap(f.snap,f.xp);VINFO={name:f.name,lvl:f.lvl,xp:f.xp};BLD=null;tab='visit';paint()
+    if(!f||!f.snap)throw 0;VS=stFromSnap(f.snap,f.xp);VINFO={id:id,name:f.name,lvl:f.lvl,xp:f.xp};BLD=null;tab='visit';paint()
   }).catch(function(){toast('Не удалось открыть ферму')})}
 function withState(st,fn){var o=S,oh=MH;S=st;setMH();try{return fn()}finally{S=o;MH=oh}}
 function viewVisit(){
   if(!VS)return viewFarms();
   var h=withState(VS,function(){return'<div class="vis"><b>'+esc(VINFO.name)+'</b><span>Ур. '+VINFO.lvl+' · '+wd().e+' '+wd().n+'</span></div><canvas id="map" width="512" height="'+MH+'" aria-label="Ферма игрока"></canvas>'});
-  return h+'<p class="empty">Это чужая ферма, здесь можно только смотреть.</p><button class="btn" data-tab="farms" style="width:100%">Назад к списку</button>'}
+  return h+'<p class="empty">Это чужая ферма, здесь можно только смотреть.</p><button class="btn alt" data-mto="'+esc(VINFO.id)+'" data-mname="'+esc(VINFO.name)+'" style="width:100%;margin-bottom:8px">🎁 Подарить подарок</button><button class="btn" data-tab="farms" style="width:100%">Назад к списку</button>'}
 function drawVisit(now){withState(VS,function(){drawMap(now)})}
 
 /* ===== ВЫДАЧИ АДМИНА ===== */
@@ -1308,6 +1341,86 @@ document.addEventListener('click',function(e){
 });
 try{var w=tg();if(w){w.ready();w.expand();if(w.disableVerticalSwipes)w.disableVerticalSwipes()}}catch(e){}
 $('#tabs').innerHTML=E($('#tabs').innerHTML);$('#fab').innerHTML=E($('#fab').innerHTML);load();HEN.open=!S.fname;$('#prof').innerHTML=E('👤');sndIcon();if(S.claimed!==today()&&S.fname)tab='daily';paint();setInterval(function(){tick();tickTs();alerts();petWork();shopTick();foxTick();storyAuto()},500);cloudLoad();topLoad();setInterval(topLoad,60000);evLoad();setInterval(evLoad,15000);setInterval(evTick,500);setTimeout(snapPost,5000);setInterval(snapPost,60000);setInterval(claimPaid,25000);
+
+/* ===== ПРУД: мальки -> рыба ===== */
+var PF_MAX=4,PF_TIME=1200,PF_COST=20,PONDI=-1,PONDT=0;
+function pondReady(o){var n=Date.now();return(o.f||[]).some(function(t){return n>=t+PF_TIME*1000})}
+function pondFx(g,o,now){var f=o.f,n=Date.now(),bx=o.x*16,by=o.y*16;if(!f||!f.length)return;
+  f.forEach(function(t,j){var pr=Math.min(1,(n-t)/(PF_TIME*1000)),w=3+Math.round(pr*4),a=now/900+j*1.9,x=bx+24+Math.sin(a)*13-w/2,y=by+18+Math.cos(now/1100+j*2.3)*5,r=Math.cos(a)>0;
+    R(g,'#ff8a1c',x|0,y|0,w,2+(pr>.55?1:0));R(g,'#ffd08a',(x+(r?w-2:0))|0,y|0,1,1);R(g,'#e0600a',(r?x-2:x+w)|0,(y-1)|0,2,3+(pr>.55?1:0))});
+  if(pondReady(o))bubble(g,bx+24,by+2,'🐟',now)}
+function pondHTML(o){
+  var n=Date.now(),h='<b style="font-size:11px">🐟 Пруд</b><div class="r" style="margin:6px 0 10px">Малёк стоит '+PF_COST+' 🪙, растёт '+Math.round(PF_TIME/60)+' мин и превращается в рыбу (продаётся за '+byId('fish').sell+' 🪙). Мест: '+PF_MAX+'.</div>',j;
+  for(j=0;j<PF_MAX;j++){var t=(o.f||[])[j];
+    if(t===undefined)h+='<div class="card"><div class="t">Свободное место</div><button class="btn alt" data-pa="add">🐟 Малёк · '+PF_COST+' 🪙</button></div>';
+    else{var rt=t+PF_TIME*1000,rd=n>=rt,pr=Math.min(1,(n-t)/(PF_TIME*1000));
+      h+='<div class="card"><div class="t">'+(rd?'🐟 Рыба выросла!':pr>=.5?'🐟 Подрастает':'🐠 Малёк')+(rd?'':'<div class="r">Ещё '+fmt(Math.ceil((rt-n)/1000))+'</div><div class="bar" style="height:8px;margin-top:4px"><i style="width:'+Math.round(pr*100)+'%"></i></div>')+'</div>'+(rd?'<button class="btn" data-pa="take:'+j+'">Выловить</button>':'')+'</div>'}}
+  return h+'<button class="btn" data-pa="close" style="width:100%;margin-top:8px">Закрыть</button>'}
+function pondRender(){var ov=document.getElementById('pondov');if(!ov)return;var o=S.obj[PONDI];if(!o||o.k!=='pond'){pondClose();return}
+  var b=ov.firstChild;b.innerHTML=E(pondHTML(o))}
+function pondClose(){var ov=document.getElementById('pondov');if(ov)ov.remove();clearInterval(PONDT);PONDI=-1;BLD=null;paint()}
+function pondOpen(i){PONDI=i;var o=S.obj[i];if(!o)return;if(!o.f)o.f=[];
+  var ov=document.createElement('div');ov.id='pondov';ov.style.cssText='position:fixed;inset:0;background:rgba(20,10,5,.82);z-index:9997;display:flex;align-items:center;justify-content:center;padding:14px';
+  ov.innerHTML='<div style="background:var(--panel);border:4px solid var(--ink);padding:14px;width:100%;max-width:420px;max-height:90vh;overflow:auto"></div>';
+  document.body.appendChild(ov);pondRender();clearInterval(PONDT);PONDT=setInterval(pondRender,1000);
+  ov.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button[data-pa]');if(!b)return;var a=b.dataset.pa,o=S.obj[PONDI];if(!o)return;
+    if(a==='close')return pondClose();
+    if(a==='add'){if((o.f||[]).length>=PF_MAX)return;if(S.coins<PF_COST)return toast('Нужно '+PF_COST+' 🪙');S.coins-=PF_COST;o.f=(o.f||[]).concat([Date.now()]);toast('Малёк запущен в пруд');save();paintHead();pondRender()}
+    else if(a.indexOf('take:')===0){var j=+a.slice(5),t=(o.f||[])[j];if(t===undefined||Date.now()<t+PF_TIME*1000)return;if(used()+1>capN())return toast('Амбар полон — продайте товар');
+      o.f.splice(j,1);S.inv.fish=(S.inv.fish||0)+1;addXp(3);qp('animal',1);toast('+1 🐟');save();paintHead();pondRender()}})}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button');if(!b)return;var d=b.dataset;
+  if(d.pond&&BLD&&BLD.mode==='sel')pondOpen(BLD.i);
+  else if(d.mailopen){BLD=null;tab='mail';paint()}});
+
+/* ===== ПОЧТА: подарки друзьям ===== */
+var MAIL=null,MAILN=0,MTO=null,MBUSY=0;
+function mailOk(){var t=window.Telegram&&Telegram.WebApp;return !!(API&&t&&t.initData)}
+function mailLoad(){if(!mailOk())return;api('/claim',{op:'box'}).then(function(j){if(j&&j.ok){var prevLen=MAIL?MAIL.length:-1;MAIL=j.items||[];MAILN=MAIL.filter(function(g){return S.gd.indexOf(g.id)<0}).length;if(MAILN!==MAIL.length){var done=MAIL.filter(function(g){return S.gd.indexOf(g.id)>=0}).map(function(g){return g.id});if(done.length)api('/claim',{op:'ack',ack:done}).catch(function(){});MAIL=MAIL.filter(function(g){return S.gd.indexOf(g.id)<0})}
+  if(tab==='mail'&&prevLen!==MAIL.length)paint();else alerts()}}).catch(function(){})}
+function giftTxt(g){if(g.kind==='coins')return'🪙 '+g.n;if(g.kind==='fert')return'🧪 ×'+g.n;var c=byId(g.k);return c?c.e+' '+c.n+' ×'+g.n:'🎁 ×'+g.n}
+function mailApply(g){if(S.gd.indexOf(g.id)>=0)return;S.gd.push(g.id);if(S.gd.length>80)S.gd.shift();
+  if(g.kind==='coins')S.coins+=g.n;else if(g.kind==='fert')S.fert+=g.n;else if(byId(g.k))S.inv[g.k]=(S.inv[g.k]||0)+g.n}
+function mailTake(id){if(!MAIL)return;var L=id?MAIL.filter(function(g){return g.id===id}):MAIL.slice();if(!L.length)return;
+  L.forEach(mailApply);var ids=L.map(function(g){return g.id});MAIL=MAIL.filter(function(g){return ids.indexOf(g.id)<0});MAILN=MAIL.length;toast('🎁 Получено: '+L.map(giftTxt).join(', '));save();paint();
+  api('/claim',{op:'ack',ack:ids}).catch(function(){})}
+function mailSend(spec,msg){
+  if(!MTO||MBUSY)return;var p=spec.split(':'),kind=p[0],k=kind==='item'?p[1]:'',n=+(kind==='item'?p[2]:p[1]);
+  if(kind==='coins'){if(S.coins<n)return toast('Не хватает монет')}else if(kind==='fert'){if(S.fert<n)return toast('Нет удобрения')}else{if((S.inv[k]||0)<n)return toast('Не хватает товара')}
+  MBUSY=1;if(kind==='coins')S.coins-=n;else if(kind==='fert')S.fert-=n;else S.inv[k]-=n;save();paintHead();
+  var back=function(){if(kind==='coins')S.coins+=n;else if(kind==='fert')S.fert+=n;else S.inv[k]=(S.inv[k]||0)+n;save();paint()};
+  api('/claim',{op:'send',to:MTO.id,kind:kind,k:k,n:n,msg:msg||'',fn:S.fname||myName()}).then(function(j){MBUSY=0;
+    if(j&&j.ok){toast('🎁 Подарок отправлен!'+(j.left>=0?' Осталось сегодня: '+j.left:''));MTO=null;paint()}else{toast((j&&j.err)||'Не удалось отправить');back()}
+  }).catch(function(){MBUSY=0;toast('Нет связи с сервером');back()})}
+function viewMail(){
+  var h='<h2>💌 Почта</h2>',bk='<button class="btn" data-tab="farm" style="width:100%;margin-top:10px">К ферме</button>';
+  if(!mailOk())return h+'<p class="empty">Почта работает внутри Telegram: здесь приходят подарки от друзей, а ты можешь отправлять их другим игрокам.</p>'+bk;
+  if(MAIL===null){mailLoad();h+='<p class="empty">Загружаю…</p>'}
+  else{
+    h+='<h3 class="sh">📥 Входящие</h3>';
+    if(!MAIL.length)h+='<p class="empty">Писем нет. Подарки от друзей появятся здесь.</p>';
+    else{MAIL.forEach(function(g){h+='<div class="card"><div class="t">От '+esc(g.fn||'друга')+': '+giftTxt(g)+(g.msg?'<div class="r">«'+esc(g.msg)+'»</div>':'')+'</div><button class="btn" data-mtk="'+esc(g.id)+'">Забрать</button></div>'});
+      if(MAIL.length>1)h+='<button class="btn" data-mtka="1" style="width:100%;margin-bottom:8px">Забрать всё</button>'}
+  }
+  h+='<h3 class="sh">🎁 Отправить подарок</h3>';
+  if(MTO){
+    h+='<div class="card"><div class="t">Для: '+esc(MTO.name||'игрока')+'<div class="r">До 5 подарков в сутки</div></div><button class="btn alt" data-mto="">Отмена</button></div>';
+    h+='<input id="mmsg" maxlength="40" placeholder="Записка (необязательно)" autocomplete="off" style="width:100%;margin:6px 0 10px;padding:8px;border:3px solid var(--ink);font:inherit">';
+    h+='<div class="card"><div class="t">Монеты</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+[50,100,250,500].map(function(n){return'<button class="btn alt" data-mg="coins:'+n+'"'+(S.coins<n?' disabled':'')+'>🪙 '+n+'</button>'}).join('')+'</div></div>';
+    h+='<div class="card"><div class="t">Удобрение</div><button class="btn alt" data-mg="fert:1"'+(S.fert<1?' disabled':'')+'>🧪 ×1</button></div>';
+    var ids=Object.keys(S.inv).filter(function(k){return S.inv[k]>0&&byId(k)});
+    ids.forEach(function(k){var c=byId(k),n=S.inv[k];h+='<div class="card"><div class="t">'+c.e+' '+c.n+' <span class="r">(есть: '+n+')</span></div><button class="btn alt" data-mg="item:'+k+':1">×1</button>'+(n>=5?'<button class="btn alt" data-mg="item:'+k+':5">×5</button>':'')+'</div>'});
+    if(!ids.length)h+='<p class="empty">В амбаре пусто: товары для подарка появятся, когда что-нибудь вырастишь.</p>'
+  }else{
+    if(FARMS===null){farmsLoad();h+='<p class="empty">Загружаю список игроков…</p>'}
+    else if(!FARMS.length)h+='<p class="empty">Пока нет других игроков в списке.</p>';
+    else{h+='<p class="empty" style="margin:0 0 8px">Выбери друга из списка ферм:</p>';FARMS.slice(0,30).forEach(function(f){h+='<div class="card"><div class="t">'+esc(f.name)+'<div class="r">Ур. '+f.lvl+'</div></div><button class="btn alt" data-mto="'+esc(f.id)+'" data-mname="'+esc(f.name)+'">🎁</button></div>'})}
+  }
+  return h+bk}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button');if(!b)return;var d=b.dataset;
+  if(d.mto!==undefined){if(d.mto===''){MTO=null}else{MTO={id:d.mto,name:d.mname||''};tab='mail'}paint()}
+  else if(d.mtk)mailTake(d.mtk);else if(d.mtka)mailTake('');
+  else if(d.mg){var i=document.getElementById('mmsg');mailSend(d.mg,i?i.value:'')}});
+setTimeout(mailLoad,4000);setInterval(mailLoad,30000);
 </script>
 </body>
 </html>
