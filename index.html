@@ -1226,7 +1226,7 @@ function stFromSnap(sn,xp){
   var now=Date.now(),pl=[],i,q,c;
   for(i=0;i<9;i++){q=sn.pl&&sn.pl[i];c=q&&byId(q[0]);pl.push(c?{crop:q[0],t:now-(q[1]>=100?c.time*1000:q[1]/100*c.time*1000)}:null)}
   return{plots:pl,unlocked:Math.max(4,Math.min(9,sn.u||4)),pen:(sn.pn||[]).map(function(x){return x?now:0}),pet:sn.pet?1:0,dog:sn.dog?1:0,
-    obj:(sn.o||[]).filter(function(a){return OBJ_BY[a[0]]}).map(function(a){return{k:a[0],x:a[1]|0,y:a[2]|0}}),ld:Math.max(0,Math.min(6,sn.ld|0)),wl:WORLDS[sn.w]?sn.w:'farm',xp:xp||0,coins:0,fert:0,inv:{},ch:{c:0,r:0,l:0},sp:0,cap:20,mat:{},dec:{},fname:sn.fn||''}}
+    obj:(sn.o||[]).filter(function(a){return OBJ_BY[a[0]]}).map(function(a){var q={k:a[0],x:a[1]|0,y:a[2]|0};if(a[3]>0){q.f=[];for(var z=0;z<Math.min(4,a[3]|0);z++)q.f.push(now-PF_TIME*600+z*30000)}return q}),ld:Math.max(0,Math.min(6,sn.ld|0)),wl:WORLDS[sn.w]?sn.w:'farm',xp:xp||0,coins:0,fert:0,inv:{},ch:{c:0,r:0,l:0},sp:0,cap:20,mat:{},dec:{},fname:sn.fn||''}}
 function visitFarm(id){
   if(!API)return toast('Нет связи с сервером');
   fetch(API+'/farm?id='+encodeURIComponent(id)).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(f){
@@ -1252,7 +1252,7 @@ function admGrant(s){
 function mkSnap(){
   var pl=[],i,p,s;
   for(i=0;i<9;i++){p=S.plots[i];if(!p||i>=S.unlocked){pl.push(0);continue}s=plotState(p);pl.push([p.crop,s.ready?100:Math.min(99,s.pct||0)])}
-  return{w:wid(),ld:S.ld||0,u:S.unlocked,pl:pl,o:S.obj.map(function(o){return[o.k,o.x,o.y]}),pn:S.pen.map(function(t){return t?1:0}),pet:S.pet?1:0,dog:S.dog?1:0,fn:S.fname||''}}
+  return{w:wid(),ld:S.ld||0,u:S.unlocked,pl:pl,o:S.obj.map(function(o){return[o.k,o.x,o.y,(o.f||[]).length]}),pn:S.pen.map(function(t){return t?1:0}),pet:S.pet?1:0,dog:S.dog?1:0,fn:S.fname||''}}
 function snapPost(){
   if(!API||!S)return;var tg=window.Telegram&&Telegram.WebApp;if(!tg||!tg.initData)return;
   api('/snap',{name:S.fname||myName(),lvl:lvl(),xp:S.xp,coins:S.coins,snap:mkSnap()}).catch(function(){})}
@@ -1346,8 +1346,10 @@ $('#tabs').innerHTML=E($('#tabs').innerHTML);$('#fab').innerHTML=E($('#fab').inn
 var PF_MAX=4,PF_TIME=1200,PF_COST=20,PONDI=-1,PONDT=0;
 function pondReady(o){var n=Date.now();return(o.f||[]).some(function(t){return n>=t+PF_TIME*1000})}
 function pondFx(g,o,now){var f=o.f,n=Date.now(),bx=o.x*16,by=o.y*16;if(!f||!f.length)return;
-  f.forEach(function(t,j){var pr=Math.min(1,(n-t)/(PF_TIME*1000)),w=3+Math.round(pr*4),a=now/900+j*1.9,x=bx+24+Math.sin(a)*13-w/2,y=by+18+Math.cos(now/1100+j*2.3)*5,r=Math.cos(a)>0;
-    R(g,'#ff8a1c',x|0,y|0,w,2+(pr>.55?1:0));R(g,'#ffd08a',(x+(r?w-2:0))|0,y|0,1,1);R(g,'#e0600a',(r?x-2:x+w)|0,(y-1)|0,2,3+(pr>.55?1:0))});
+  f.forEach(function(t,j){var pr=Math.min(1,(n-t)/(PF_TIME*1000)),big=pr>=.5,w=big?10:6,h=big?5:3,a=now/900+j*1.9,x=Math.round(bx+24+Math.sin(a)*14-w/2),y=Math.round(by+17+Math.cos(now/1100+j*2.3)*5),r=Math.cos(a)>0;
+    R(g,'#3a2417',x-1,y-1,w+2,h+2);R(g,big?'#ff8a1c':'#ffc060',x,y,w,h);R(g,big?'#ffd08a':'#fff0c0',x+1,y,w-3,1);
+    var tx=r?x-3:x+w;R(g,'#3a2417',tx-(r?0:0),y-1,3,h+2);R(g,big?'#e0600a':'#ff9a2a',tx,y,2,h);
+    R(g,'#2b1b12',r?x+w-3:x+1,y+1,1,1)});
   if(pondReady(o))bubble(g,bx+24,by+2,'🐟',now)}
 function pondHTML(o){
   var n=Date.now(),h='<b style="font-size:11px">🐟 Пруд</b><div class="r" style="margin:6px 0 10px">Малёк стоит '+PF_COST+' 🪙, растёт '+Math.round(PF_TIME/60)+' мин и превращается в рыбу (продаётся за '+byId('fish').sell+' 🪙). Мест: '+PF_MAX+'.</div>',j;
