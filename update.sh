@@ -171,7 +171,21 @@ def start(m):
         d = load()
         if m.chat.id not in d["subs"]:
             d["subs"].append(m.chat.id); save(d)
-    bot.send_message(m.chat.id, "🌱 Добро пожаловать на «Мини-ферму»!\nСажайте, собирайте урожай, стройте и растите ферму.", reply_markup=play_kb())
+    lang = (getattr(m.from_user, "language_code", "") or "").lower()
+    ru = lang[:2] in ("ru", "uk", "be", "kk")
+    note = ""
+    parts = (m.text or "").split(maxsplit=1)
+    if len(parts) > 1 and parts[1].startswith("ref_"):       # приглашение друга: t.me/бот?start=ref_<код>
+        try:
+            import admin as _adm
+            r = _adm.ref_set(m.from_user.id, parts[1][4:], bot)
+            if r.get("ok"):
+                note = ("\n\n🎁 Вас пригласил друг: в игре вас ждёт бонус %d 🪙!" if ru else "\n\n🎁 A friend invited you: a %d 🪙 bonus is waiting in the game!") % r["welcome"]
+        except Exception:
+            pass
+    txt = ("🌱 Добро пожаловать на «Мини-ферму»!\nСажайте, собирайте урожай, стройте и растите ферму." if ru
+           else "🌱 Welcome to Mini Farm!\nPlant, harvest, build and grow your farm.")
+    bot.send_message(m.chat.id, txt + note, reply_markup=play_kb())
 
 
 PRESETS = {
@@ -506,7 +520,20 @@ def install(bot, token):
             d["grants"].setdefault(uid, []).append({"id": gid, "sku": sku})
             d.setdefault("hist", []).append({"uid": uid, "sku": sku, "gid": gid, "amt": sp.total_amount, "t": int(time.time()), "got": 0})
             d["hist"] = d["hist"][-500:]
+            # партнёрка: пригласивший получает % от покупки (в монетах игры)
+            inv = (d.get("ref") or {}).get(uid); rb = 0
+            if inv and sp.total_amount > 0:
+                try:
+                    import admin as _a
+                    rb = _a.ref_bonus(sp.total_amount)
+                    d["grants"].setdefault(inv, []).append({"id": uuid.uuid4().hex[:12], "sku": "ref_%d" % rb})
+                    st = d.setdefault("refstat", {}).setdefault(inv, {"n": 0, "coins": 0}); st["coins"] += rb
+                except Exception:
+                    rb = 0
             _save(d)
+        if rb and inv:
+            try: bot.send_message(int(inv), "🤝 Ваш друг сделал покупку: вам +%d 🪙 (партнёрская программа). Заберите в игре!" % rb)
+            except Exception: pass
 
     # платёжные обработчики — раньше общих «ловушек» из server.py
     bot.pre_checkout_query_handlers.insert(0, bot.pre_checkout_query_handlers.pop())
@@ -552,6 +579,7 @@ class H(BaseHTTPRequestHandler):
             if self.path == "/invoice": return self._send(200, payments.api_invoice(bot, body))
             if self.path == "/claim":
                 if body.get("op") in ("box", "send", "ack"): return self._send(200, admin.mail_api(body, bot))
+                if body.get("op") in ("ref", "refset", "ping"): return self._send(200, admin.ref_api(body, bot))
                 return self._send(200, payments.api_claim(body))
             if self.path == "/snap":
                 uid = payments.user_id(body.get("initData", ""))
@@ -591,16 +619,30 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PFILE = os.path.join(HERE, "players.json")
 LOGF = os.path.join(HERE, "admin.log")
 _last = {}
+_on = {}            # игроки онлайн: uid -> время последнего сигнала
+ONLINE_SEC = 150
 _lk = threading.Lock()
 
 
 # ---------- хранилище игроков ----------
+_pc = {"m": None, "d": {}}
+
+
 def _pload():
+    """Читает players.json; повторно не парсит, пока файл не изменился (разгрузка сервера)."""
     try:
-        with open(PFILE, encoding="utf-8") as f:
-            return json.load(f)
+        m = os.stat(PFILE).st_mtime_ns
     except Exception:
         return {}
+    if _pc["m"] == m:
+        return _pc["d"]
+    try:
+        with open(PFILE, encoding="utf-8") as f:
+            d = json.load(f)
+    except Exception:
+        return {}
+    _pc["m"], _pc["d"] = m, d
+    return d
 
 
 def _psave(d):
@@ -625,6 +667,7 @@ def record_snapshot(uid, name, lvl, xp, coins, snap):
         if now - _last.get(uid, 0) < 15:
             return False
         _last[uid] = now
+    _on[str(uid)] = now
     if not isinstance(snap, dict) or len(json.dumps(snap)) > 24000:
         return False
     with P._Lock():
@@ -646,8 +689,17 @@ def farms_list(limit=50):
     cutoff = time.time() - 60 * 86400
     rows = [(u, v) for u, v in d.items() if v.get("seen", 0) > cutoff]
     rows.sort(key=lambda r: r[1].get("xp", 0), reverse=True)
+    t = time.time() - ONLINE_SEC
     return [{"id": hid(u), "name": v.get("name", "Фермер"), "lvl": v.get("lvl", 1),
-             "xp": v.get("xp", 0), "w": (v.get("snap") or {}).get("w", "farm")} for u, v in rows[:limit]]
+             "xp": v.get("xp", 0), "w": (v.get("snap") or {}).get("w", "farm"),
+             "on": 1 if _on.get(u, 0) > t else 0} for u, v in rows[:limit]]
+
+
+def online_count():
+    t = time.time() - ONLINE_SEC
+    for u in [u for u, x in _on.items() if x < t - 3600]:
+        _on.pop(u, None)
+    return sum(1 for x in _on.values() if x > t)
 
 
 def get_farm(h):
@@ -655,6 +707,67 @@ def get_farm(h):
         if hid(u) == h:
             return {"name": v.get("name"), "lvl": v.get("lvl"), "xp": v.get("xp"), "snap": v.get("snap")}
     return None
+
+
+# ---------- партнёрка «приведи друга» ----------
+REF_PCT = 10              # % от покупки приглашённого, который получает пригласивший
+REF_COINS_PER_STAR = 100  # 1 ⭐ = 100 🪙 для расчёта бонуса (10% => 10 🪙 за каждую потраченную ⭐)
+REF_WELCOME = 200         # приветственный бонус приглашённому (🪙)
+_bu = {"n": ""}
+
+
+def ref_bonus(stars):
+    """Бонус пригласившему в монетах за покупку на `stars` ⭐."""
+    return max(1, int(stars * REF_COINS_PER_STAR * REF_PCT / 100))
+
+
+def _bot_name(bot):
+    if not _bu["n"] and bot is not None:
+        try: _bu["n"] = bot.get_me().username or ""
+        except Exception: pass
+    return _bu["n"]
+
+
+def ref_set(uid, code, bot=None):
+    """Привязывает игрока uid к пригласившему (код = публичный id фермы). Один раз и навсегда.
+    Нельзя: себя, того, кого пригласил сам, и после своей первой покупки."""
+    uid = str(uid); code = str(code or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{10}", code): return {"ok": False, "err": "code"}
+    inv = None
+    for u in _pload():
+        if hid(u) == code: inv = u; break
+    if not inv: return {"ok": False, "err": "Приглашение не найдено"}
+    if inv == uid: return {"ok": False, "err": "Нельзя пригласить самого себя"}
+    with P._Lock():
+        d = P._load(); r = d.setdefault("ref", {})
+        if uid in r: return {"ok": False, "err": "Вы уже приглашены"}
+        if r.get(inv) == uid: return {"ok": False, "err": "Это ваш приглашённый"}
+        if any(h.get("uid") == uid for h in d.get("hist", [])): return {"ok": False, "err": "Уже есть покупки"}
+        r[uid] = inv
+        st = d.setdefault("refstat", {}).setdefault(inv, {"n": 0, "coins": 0})
+        st["n"] += 1
+        d["grants"].setdefault(uid, []).append({"id": uuid.uuid4().hex[:12], "sku": "refw_%d" % REF_WELCOME})
+        P._save(d)
+    if bot is not None:
+        try: bot.send_message(int(inv), "🤝 По вашей ссылке пришёл новый фермер! Вы получите %d%% бонусом с его покупок." % REF_PCT)
+        except Exception: pass
+    return {"ok": True, "welcome": REF_WELCOME}
+
+
+def ref_api(body, bot=None):
+    """POST /claim с op: ref (моя ссылка и статистика) · refset (принять приглашение) · ping (я онлайн)."""
+    uid = P.user_id(body.get("initData", ""))
+    if not uid: return {"ok": False, "err": "auth"}
+    op = body.get("op")
+    if op == "ping":
+        _on[uid] = time.time()
+        return {"ok": True, "online": online_count()}
+    if op == "refset":
+        return ref_set(uid, body.get("code"), bot)
+    d = P._load()
+    st = (d.get("refstat") or {}).get(uid) or {"n": 0, "coins": 0}
+    return {"ok": True, "bot": _bot_name(bot), "code": hid(uid), "n": st["n"], "coins": st["coins"],
+            "pct": REF_PCT, "by": 1 if uid in (d.get("ref") or {}) else 0, "online": online_count()}
 
 
 # ---------- почта: подарки друзьям ----------
