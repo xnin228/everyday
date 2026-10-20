@@ -343,8 +343,9 @@ function viewTown(){
   h+='<h2 style="margin-top:16px">Дороги</h2><button class="btn" data-tab="orders" style="width:100%;margin-bottom:12px">🚚 Грузовик: доставка заказов</button><button class="btn alt" data-top="1" style="width:100%">🏆 Рейтинг ферм</button>';
   return h
 }
-var API_DEFAULT='';/* запасной адрес сервера, если его нет в ссылке: https://ваш-домен */
-var API=(function(){var a='';try{a=(new URLSearchParams(location.search).get('api')||'').replace(/\/+$/,'');if(/^https:\/\/[^\s\/]+$/.test(a))localStorage.setItem('minifarm-api',a);else a=localStorage.getItem('minifarm-api')||''}catch(e){}return a||API_DEFAULT})(),TOP=null;
+var API_DEFAULT='https://46-21-80-141.sslip.io',API_OLD=['138-124-103-155.sslip.io'];/* запасной адрес сервера, если его нет в ссылке: https://ваш-домен */
+function apiFix(a){API_OLD.forEach(function(h){if(a==='https://'+h)a=API_DEFAULT});return a}
+var API=(function(){var a='';try{a=apiFix((new URLSearchParams(location.search).get('api')||'').replace(/\/+$/,''));if(/^https:\/\/[^\s\/]+$/.test(a))localStorage.setItem('minifarm-api',a);else a=apiFix(localStorage.getItem('minifarm-api')||'')}catch(e){}return a||API_DEFAULT})(),TOP=null;
 var EVS=[],EVOFF=0,EVID='',WXS=null,WXID='';
 function ev(){var n=Date.now()+EVOFF,a=EVS.filter(function(e){return e&&e.end>n});if(!a.length)return null;if(a.length===1)return a[0];
   var r={id:a.map(function(e){return e.id}).join('+'),name:a.map(function(e){return e.name}).join(' + '),emoji:a[0].emoji,desc:'',end:Math.min.apply(null,a.map(function(e){return e.end}))};
