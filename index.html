@@ -638,7 +638,7 @@ function tickTs(no){
 }
 function alerts(){
   var n=Date.now(),a={
-    farm:S.plots.some(function(p,i){var s=i<S.unlocked&&plotState(p);return s&&s.ready})||S.obj.some(function(o){return o.k==='pond'&&pondReady(o)}),
+    farm:S.plots.some(function(p,i){var s=i<S.unlocked&&plotState(p);return s&&s.ready})||S.obj.some(function(o){return o.k==='pond'&&pondReady(o)})||(S.lake&&pondReady(S.lake)),
     mail:(typeof MAILN!=='undefined'&&MAILN>0),
     pen:S.pen.some(function(t,i){return t&&n>=t+ANIM[i].time*1000})||!!(S.oven&&n>=S.oven.t+BAKE[S.oven.r].time*1000),
     barn:mer().on&&used()>0,orders:S.orders.some(function(o){for(var id in o.items)if((S.inv[id]||0)<o.items[id])return false;return true}),
@@ -660,7 +660,7 @@ function viewFarm(){
   var sd=C.map(function(c){
     return'<button class="seed'+(S.sel===c.id?' on':'')+'" data-s="'+c.id+'"'+(c.lvl>lvl()?' disabled':'')+'>'+c.e+'<small>'+(c.lvl>lvl()?'ур. '+c.lvl:c.cost+' 🪙')+'</small></button>'
   }).join('');
-  return worldBar()+bldBar()+wx()+'<div class="seeds st">'+sd+'<button class="seed'+(S.sel==='fert'?' on':'')+'" data-s="fert">🧪<small>'+S.fert+'</small></button><button class="seed'+(S.sel==='cancel'?' on':'')+'" data-s="cancel">❌<small>отм.</small></button></div><canvas id="map" width="512" height="'+MH+'" aria-label="Карта фермы"></canvas>'+'<button class="btn alt" data-tab="build" style="width:100%;margin-top:12px">🏗 Стройка · земля и постройки</button>'+decRow()+'<p class="empty">Выберите семена на панели сверху, нажмите на пустую грядку, а когда вырастет — на урожай. Здания на карте открывают разделы. Ошиблись с посевом? Выберите ❌ и нажмите на растущую грядку.</p>'
+  return worldBar()+bldBar()+wx()+'<div class="seeds st">'+sd+'<button class="seed'+(S.sel==='fert'?' on':'')+'" data-s="fert">🧪<small>'+S.fert+'</small></button><button class="seed'+(S.sel==='cancel'?' on':'')+'" data-s="cancel">❌<small>отм.</small></button></div><canvas id="map" width="512" height="'+MH+'" aria-label="Карта фермы"></canvas>'+'<button class="btn alt" data-tab="build" style="width:100%;margin-top:12px">🏗 Стройка · земля и постройки</button><button class="btn alt" data-lake="1" style="width:100%;margin-top:8px">🌊 Озеро · разводить рыбу'+(lakeObj().f.length?' ('+lakeObj().f.length+'/'+LAKE_MAX+')':'')+'</button>'+decRow()+'<p class="empty">Выберите семена на панели сверху, нажмите на пустую грядку, а когда вырастет — на урожай. Здания на карте открывают разделы. Ошиблись с посевом? Выберите ❌ и нажмите на растущую грядку.</p>'
 }
 function viewOrders(){
   return'<h2>Заказы</h2>'+viewFair()+S.orders.map(function(o,k){
@@ -950,6 +950,7 @@ function mapClick(e){
   i=objAt(x,y);if(i>=0){BLD={mode:'sel',i:i};return bldUpdate()}
   if(y>=MH0){if(BLD){BLD=null;bldUpdate()}return}
   if(BLD){BLD=null;bldUpdate()}
+  if(Math.pow((x-72)/70,2)+Math.pow((y-552)/80,2)<1)return pondOpen(-2);
   for(i=0;i<9;i++){q=plotXY(i);if(inR(x,y,q[0],q[1],64,64))return tapPlot(i)}
   if(inR(x,y,CARTX-56,380,100,52)){tab='orders';return paint()}
   if(inR(x,y,344,8,136,140)){tab='barn';return paint()}
@@ -1254,7 +1255,7 @@ function stFromSnap(sn,xp){
   var now=Date.now(),pl=[],i,q,c;
   for(i=0;i<9;i++){q=sn.pl&&sn.pl[i];c=q&&byId(q[0]);pl.push(c?{crop:q[0],t:now-(q[1]>=100?c.time*1000:q[1]/100*c.time*1000)}:null)}
   return{plots:pl,unlocked:Math.max(4,Math.min(9,sn.u||4)),pen:(sn.pn||[]).map(function(x){return x?now:0}),pet:sn.pet?1:0,dog:sn.dog?1:0,
-    obj:(sn.o||[]).filter(function(a){return OBJ_BY[a[0]]}).map(function(a){var q={k:a[0],x:a[1]|0,y:a[2]|0};if(a[3]>0){q.f=[];for(var z=0;z<Math.min(4,a[3]|0);z++)q.f.push(now-PF_TIME*600+z*30000)}return q}),ld:Math.max(0,Math.min(6,sn.ld|0)),wl:WORLDS[sn.w]?sn.w:'farm',xp:xp||0,coins:0,fert:0,inv:{},ch:{c:0,r:0,l:0},sp:0,cap:20,mat:{},dec:{},fname:sn.fn||''}}
+    obj:(sn.o||[]).filter(function(a){return OBJ_BY[a[0]]}).map(function(a){var q={k:a[0],x:a[1]|0,y:a[2]|0};if(a[3]>0){q.f=[];for(var z=0;z<Math.min(4,a[3]|0);z++)q.f.push(now-PF_TIME*600+z*30000)}return q}),lake:{f:(function(){var a=[];for(var z=0;z<Math.min(8,sn.l|0);z++)a.push(now-PF_TIME*600+z*30000);return a})()},ld:Math.max(0,Math.min(6,sn.ld|0)),wl:WORLDS[sn.w]?sn.w:'farm',xp:xp||0,coins:0,fert:0,inv:{},ch:{c:0,r:0,l:0},sp:0,cap:20,mat:{},dec:{},fname:sn.fn||''}}
 function visitFarm(id){
   if(!API)return toast('Нет связи с сервером');
   fetch(API+'/farm?id='+encodeURIComponent(id)).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(f){
@@ -1280,7 +1281,7 @@ function admGrant(s){
 function mkSnap(){
   var pl=[],i,p,s;
   for(i=0;i<9;i++){p=S.plots[i];if(!p||i>=S.unlocked){pl.push(0);continue}s=plotState(p);pl.push([p.crop,s.ready?100:Math.min(99,s.pct||0)])}
-  return{w:wid(),ld:S.ld||0,u:S.unlocked,pl:pl,o:S.obj.map(function(o){return[o.k,o.x,o.y,(o.f||[]).length]}),pn:S.pen.map(function(t){return t?1:0}),pet:S.pet?1:0,dog:S.dog?1:0,fn:S.fname||''}}
+  return{w:wid(),ld:S.ld||0,u:S.unlocked,pl:pl,o:S.obj.map(function(o){return[o.k,o.x,o.y,(o.f||[]).length]}),l:((S.lake&&S.lake.f)||[]).length,pn:S.pen.map(function(t){return t?1:0}),pet:S.pet?1:0,dog:S.dog?1:0,fn:S.fname||''}}
 function snapPost(){
   if(!API||!S)return;var tg=window.Telegram&&Telegram.WebApp;if(!tg||!tg.initData)return;
   api('/snap',{name:S.fname||myName(),lvl:lvl(),xp:S.xp,coins:S.coins,snap:mkSnap()}).catch(function(){})}
@@ -1374,6 +1375,7 @@ $('#tabs').innerHTML=E($('#tabs').innerHTML);$('#fab').innerHTML=E($('#fab').inn
 /* ===== ПРУД: мальки -> рыба ===== */
 var PF_MAX=4,PF_TIME=1200,PF_COST=20,PONDI=-1,PONDT=0;
 function PFT(){var b=wd().b;return PF_TIME*1000/((b&&b.fish)||1)}
+var LAKE_MAX=8;function lakeObj(){return S.lake||(S.lake={f:[]})}function pmax(o){return o===S.lake?LAKE_MAX:PF_MAX}function PO(){return PONDI===-2?lakeObj():S.obj[PONDI]}
 function pondReady(o){var n=Date.now();return(o.f||[]).some(function(t){return n>=t+PFT()})}
 function pondFx(g,o,now){var f=o.f,n=Date.now(),bx=o.x*16,by=o.y*16;if(!f||!f.length)return;
   f.forEach(function(t,j){var pr=Math.min(1,(n-t)/PFT()),big=pr>=.5,w=big?10:6,h=big?5:3,a=now/900+j*1.9,x=Math.round(bx+24+Math.sin(a)*14-w/2),y=Math.round(by+17+Math.cos(now/1100+j*2.3)*5),r=Math.cos(a)>0;
@@ -1381,30 +1383,41 @@ function pondFx(g,o,now){var f=o.f,n=Date.now(),bx=o.x*16,by=o.y*16;if(!f||!f.le
     var tx=r?x-3:x+w;R(g,'#3a2417',tx-(r?0:0),y-1,3,h+2);R(g,big?'#e0600a':'#ff9a2a',tx,y,2,h);
     R(g,'#2b1b12',r?x+w-3:x+1,y+1,1,1)});
   if(pondReady(o))bubble(g,bx+24,by+2,'🐟',now)}
-function lakeFx(g,now){for(var j=0;j<6;j++){var a=now/(1500+j*170)+j*1.7,b=now/(1900+j*130)+j*2.9,big=j%2===0,w=big?10:6,h=big?5:3,x=Math.round(72+Math.sin(a)*(34+j*2)-w/2),y=Math.round(552+Math.sin(b)*(52-j*2)-h/2),r=Math.cos(a)>0;
-  R(g,'#1f3f66',x-1,y-1,w+2,h+2);R(g,big?'#ff8a1c':'#ffc060',x,y,w,h);R(g,big?'#ffd08a':'#fff0c0',x+1,y,w-3,1);
-  var tx=r?x-3:x+w;R(g,'#1f3f66',tx,y-1,3,h+2);R(g,big?'#e0600a':'#ff9a2a',tx,y,2,h);R(g,'#2b1b12',r?x+w-3:x+1,y+1,1,1)}}
+function lakeFish(g,x,y,big,r,edge){var w=big?10:6,h=big?5:3;
+  R(g,edge,x-1,y-1,w+2,h+2);R(g,big?'#ff8a1c':'#ffc060',x,y,w,h);R(g,big?'#ffd08a':'#fff0c0',x+1,y,w-3,1);
+  var tx=r?x-3:x+w;R(g,edge,tx,y-1,3,h+2);R(g,big?'#e0600a':'#ff9a2a',tx,y,2,h);R(g,'#2b1b12',r?x+w-3:x+1,y+1,1,1)}
+function lakeFx(g,now){var lk=S.lake,f=(lk&&lk.f)||[],n=Date.now(),j;
+  for(j=0;j<3;j++){var a=now/(1500+j*170)+j*1.7,b=now/(1900+j*130)+j*2.9,w=j%2?6:10,h=j%2?3:5;
+    lakeFish(g,Math.round(72+Math.sin(a)*(30+j*3)-w/2),Math.round(552+Math.sin(b)*(50-j*3)-h/2),j%2===0,Math.cos(a)>0,'#1f3f66')}
+  f.forEach(function(t,k){var big=(n-t)/(PF_TIME*1000)>=.5,w=big?10:6,h=big?5:3,a=now/(1300+k*150)+k*2.3,b=now/(1700+k*110)+k*1.9;
+    lakeFish(g,Math.round(72+Math.sin(a)*(24+k%4*6)-w/2),Math.round(552+Math.sin(b)*(34+k%3*10)-h/2),big,Math.cos(a)>0,'#3a2417')});
+  if(lk&&pondReady(lk))bubble(g,72,470,'🐟',now)}
 function pondHTML(o){
-  var n=Date.now(),h='<b style="font-size:11px">🐟 Пруд</b><div class="r" style="margin:6px 0 10px">Малёк стоит '+PF_COST+' 🪙, растёт '+Math.round(PF_TIME/60)+' мин и превращается в рыбу (продаётся за '+byId('fish').sell+' 🪙). Мест: '+PF_MAX+'.</div>',j;
-  for(j=0;j<PF_MAX;j++){var t=(o.f||[])[j];
+  var n=Date.now(),mx=pmax(o),h='<b style="font-size:11px">'+(o===S.lake?'🌊 Озеро':'🐟 Пруд')+'</b><div class="r" style="margin:6px 0 10px">Малёк стоит '+PF_COST+' 🪙, растёт '+Math.round(PF_TIME/60)+' мин и превращается в рыбу (продаётся за '+byId('fish').sell+' 🪙). Мест: '+mx+'.</div>',j,nf=(o.f||[]).length,rd2=(o.f||[]).filter(function(t){return n>=t+PF_TIME*1000}).length;
+  if(nf<mx&&S.coins>=PF_COST)h+='<button class="btn alt" data-pa="fill" style="width:100%;margin-bottom:8px">🐟 Заселить все места · '+(mx-nf)*PF_COST+' 🪙</button>';
+  if(rd2)h+='<button class="btn" data-pa="all" style="width:100%;margin-bottom:8px">🎣 Выловить всю готовую ('+rd2+')</button>';
+  for(j=0;j<mx;j++){var t=(o.f||[])[j];
     if(t===undefined)h+='<div class="card"><div class="t">Свободное место</div><button class="btn alt" data-pa="add">🐟 Малёк · '+PF_COST+' 🪙</button></div>';
     else{var rt=t+PFT(),rd=n>=rt,pr=Math.min(1,(n-t)/PFT());
       h+='<div class="card"><div class="t">'+(rd?'🐟 Рыба выросла!':pr>=.5?'🐟 Подрастает':'🐠 Малёк')+(rd?'':'<div class="r">Ещё '+fmt(Math.ceil((rt-n)/1000))+'</div><div class="bar" style="height:8px;margin-top:4px"><i style="width:'+Math.round(pr*100)+'%"></i></div>')+'</div>'+(rd?'<button class="btn" data-pa="take:'+j+'">Выловить</button>':'')+'</div>'}}
   return h+'<button class="btn" data-pa="close" style="width:100%;margin-top:8px">Закрыть</button>'}
-function pondRender(){var ov=document.getElementById('pondov');if(!ov)return;var o=S.obj[PONDI];if(!o||o.k!=='pond'){pondClose();return}
+function pondRender(){var ov=document.getElementById('pondov');if(!ov)return;var o=PO();if(!o||(PONDI>=0&&o.k!=='pond')){pondClose();return}
   var b=ov.firstChild;b.innerHTML=E(pondHTML(o))}
 function pondClose(){var ov=document.getElementById('pondov');if(ov)ov.remove();clearInterval(PONDT);PONDI=-1;BLD=null;paint()}
-function pondOpen(i){PONDI=i;var o=S.obj[i];if(!o)return;if(!o.f)o.f=[];
+function pondOpen(i){PONDI=i;var o=i===-2?lakeObj():S.obj[i];if(!o)return;if(!o.f)o.f=[];
   var ov=document.createElement('div');ov.id='pondov';ov.style.cssText='position:fixed;inset:0;background:rgba(20,10,5,.82);z-index:9997;display:flex;align-items:center;justify-content:center;padding:14px';
   ov.innerHTML='<div style="background:var(--panel);border:4px solid var(--ink);padding:14px;width:100%;max-width:420px;max-height:90vh;overflow:auto"></div>';
   document.body.appendChild(ov);pondRender();clearInterval(PONDT);PONDT=setInterval(pondRender,1000);
-  ov.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button[data-pa]');if(!b)return;var a=b.dataset.pa,o=S.obj[PONDI];if(!o)return;
+  ov.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button[data-pa]');if(!b)return;var a=b.dataset.pa,o=PO();if(!o)return;
     if(a==='close')return pondClose();
-    if(a==='add'){if((o.f||[]).length>=PF_MAX)return;if(S.coins<PF_COST)return toast('Нужно '+PF_COST+' 🪙');S.coins-=PF_COST;o.f=(o.f||[]).concat([Date.now()]);toast('Малёк запущен в пруд');save();paintHead();pondRender()}
+    if(a==='fill'){var k=pmax(o)-(o.f||[]).length,c=Math.min(k,Math.floor(S.coins/PF_COST));if(c<=0)return toast('Нужно '+PF_COST+' 🪙');S.coins-=c*PF_COST;o.f=(o.f||[]);for(var q=0;q<c;q++)o.f.push(Date.now()+q);toast('Запущено мальков: '+c);save();paintHead();pondRender()}
+    else if(a==='all'){var tk=0,nn=Date.now();o.f=(o.f||[]).filter(function(t){if(nn>=t+PF_TIME*1000&&used()+tk+1<=capN()){tk++;return false}return true});if(!tk)return toast('Амбар полон — продайте товар');S.inv.fish=(S.inv.fish||0)+tk;addXp(3*tk);qp('animal',tk);toast('+'+tk+' 🐟');save();paintHead();pondRender()}
+    else if(a==='add'){if((o.f||[]).length>=pmax(o))return;if(S.coins<PF_COST)return toast('Нужно '+PF_COST+' 🪙');S.coins-=PF_COST;o.f=(o.f||[]).concat([Date.now()]);toast('Малёк запущен в пруд');save();paintHead();pondRender()}
     else if(a.indexOf('take:')===0){var j=+a.slice(5),t=(o.f||[])[j];if(t===undefined||Date.now()<t+PFT())return;if(used()+1>capN())return toast('Амбар полон — продайте товар');
       o.f.splice(j,1);S.inv.fish=(S.inv.fish||0)+1;addXp(3);qp('animal',1);toast('+1 🐟');save();paintHead();pondRender()}})}
 document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button');if(!b)return;var d=b.dataset;
-  if(d.pond&&BLD&&BLD.mode==='sel')pondOpen(BLD.i);
+  if(d.lake&&tab==='farm')pondOpen(-2);
+  else if(d.pond&&BLD&&BLD.mode==='sel')pondOpen(BLD.i);
   else if(d.mailopen){BLD=null;tab='mail';paint()}});
 
 /* ===== ПОЧТА: подарки друзьям ===== */
