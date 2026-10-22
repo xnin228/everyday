@@ -249,7 +249,7 @@ var D={streak:0,claimed:'',qd:'',quests:[],chest:0,pen:[Date.now(),0,0],st:0,sp:
 for(var k in D)if(S[k]===undefined)S[k]=D[k];
 if(S.xv!==2){S.xp=Math.round(S.xp*LVX/8);S.xv=2}
 if(!S.uid){var u0=tg()&&tg().initDataUnsafe&&tg().initDataUnsafe.user;S.uid=(u0&&u0.id)||('u'+Math.random().toString(36).slice(2,10))}
-S.obj=(S.obj||[]).filter(function(o){return o&&OBJ_BY[o.k]});setMH();while(S.orders.length<3)S.orders.push(mkOrder());daily()}
+S.obj=(S.obj||[]).filter(function(o){return o&&OBJ_BY[o.k]});S.bl=blClean(S.bl);setMH();while(S.orders.length<3)S.orders.push(mkOrder());daily()}
 function save(){S.ts=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}cloudSave()}
 var LVX=32;/* опыта на уровень: чем больше число, тем медленнее растут уровни */
 function lvl(){return Math.floor(Math.sqrt(S.xp/LVX))+1}
@@ -660,7 +660,7 @@ function viewFarm(){
   var sd=C.map(function(c){
     return'<button class="seed'+(S.sel===c.id?' on':'')+'" data-s="'+c.id+'"'+(c.lvl>lvl()?' disabled':'')+'>'+c.e+'<small>'+(c.lvl>lvl()?'ур. '+c.lvl:c.cost+' 🪙')+'</small></button>'
   }).join('');
-  return worldBar()+bldBar()+wx()+'<div class="seeds st">'+sd+'<button class="seed'+(S.sel==='fert'?' on':'')+'" data-s="fert">🧪<small>'+S.fert+'</small></button><button class="seed'+(S.sel==='cancel'?' on':'')+'" data-s="cancel">❌<small>отм.</small></button></div><canvas id="map" width="512" height="'+MH+'" aria-label="Карта фермы"></canvas>'+'<button class="btn alt" data-tab="build" style="width:100%;margin-top:12px">🏗 Стройка · земля и постройки</button><button class="btn alt" data-lake="1" style="width:100%;margin-top:8px">🌊 Озеро · разводить рыбу'+(lakeObj().f.length?' ('+lakeObj().f.length+'/'+LAKE_MAX+')':'')+'</button>'+decRow()+'<p class="empty">Выберите семена на панели сверху, нажмите на пустую грядку, а когда вырастет — на урожай. Здания на карте открывают разделы. Ошиблись с посевом? Выберите ❌ и нажмите на растущую грядку.</p>'
+  return worldBar()+bldBar()+wx()+'<div class="seeds st">'+sd+'<button class="seed'+(S.sel==='fert'?' on':'')+'" data-s="fert">🧪<small>'+S.fert+'</small></button><button class="seed'+(S.sel==='cancel'?' on':'')+'" data-s="cancel">❌<small>отм.</small></button></div><canvas id="map" width="512" height="'+MH+'" aria-label="Карта фермы"></canvas>'+'<button class="btn alt" data-tab="build" style="width:100%;margin-top:12px">🏗 Стройка · земля и постройки</button><button class="btn alt" data-lake="1" style="width:100%;margin-top:8px">🌊 Озеро · разводить рыбу'+(lakeObj().f.length?' ('+lakeObj().f.length+'/'+LAKE_MAX+')':'')+'</button><div style="display:flex;gap:8px;margin-top:8px"><button class="btn'+(EDIT?'':' alt')+'" data-edit="1" style="flex:1">'+(EDIT?'✔ Готово':'✏️ Редактор')+'</button><button class="btn alt" data-esk="1" style="flex:1">🎨 Скины</button></div>'+decRow()+'<p class="empty">Выберите семена на панели сверху, нажмите на пустую грядку, а когда вырастет — на урожай. Здания на карте открывают разделы. Ошиблись с посевом? Выберите ❌ и нажмите на растущую грядку.</p>'
 }
 function viewOrders(){
   return'<h2>Заказы</h2>'+viewFair()+S.orders.map(function(o,k){
@@ -729,37 +729,255 @@ function drawStall(g,x,y){
   R(g,'#3a2417',x+2,y+2,96,2);
   pell(g,'#e53935',x+20,y+32,6,4);pell(g,'#f28a1c',x+34,y+32,6,4);pell(g,'#f7d84a',x+48,y+32,6,4);pell(g,'#7fb040',x+62,y+32,6,4);pell(g,'#e53935',x+76,y+32,6,4)
 }
+/* ===== РЕДАКТОР ФЕРМЫ И СКИНЫ ===== */
+var EDIT=0,EH=[],SKP={},SKCAT='soil',SKTGT=-1,SKPV=null,SKBUY=null,OSC={};
+var SKDEF={soil:'classic',fence:'wood',path:'dirt',barn:'red',stall:'red',coop:'red',lake:'classic',grass:'classic',obj:'none'};
+var SKN={soil:'🌱 Грядки',fence:'🪵 Забор',path:'🛤 Дорожки',barn:'🏚 Амбар',stall:'🏪 Лавка',coop:'🐔 Курятник',lake:'🌊 Озеро',grass:'🌿 Газон',obj:'🏗 Постройка'};
+var SKO=['soil','fence','path','barn','stall','coop','lake','grass'];
+var GOLD=[[88,52,6],[190,128,20],[255,214,90]],MOON=[[20,16,52],[60,50,120],[140,130,210]],STONE=[[60,62,68],[130,132,140],[196,198,206]];
+function bsk(){return{red:{n:'Классика',sw:'#c0442c'},blue:{n:'Синий',sw:'#3a78d8',h:215,s:1.05,l:0},green:{n:'Зелёный',sw:'#3fa04a',h:125,s:1,l:0},purple:{n:'Фиолетовый',p:25,sw:'#8a4cc8',h:278,s:1,l:0},gold:{n:'Золотой',p:45,sw:'#d9a21c',m:GOLD},neon:{n:'Неон',p:75,sw:'#19d9d0',h:178,s:1.2,l:.1}}}
+var SKD={
+ soil:{classic:{n:'Классика',sw:'#6e4222'},black:{n:'Чернозём',sw:'#28180e',m:[[14,8,5],[40,24,14],[84,52,30]]},sand:{n:'Песок',sw:'#d9bc82',m:[[120,90,50],[190,160,100],[236,212,150]]},moss:{n:'Мох',p:25,sw:'#2c5424',m:[[18,40,20],[44,84,36],[98,150,60]]},moon:{n:'Лунная',p:45,sw:'#3c3278',m:MOON},gold:{n:'Золотая',p:75,sw:'#be8014',m:GOLD}},
+ fence:{wood:{n:'Дерево',sw:'#b27d44'},white:{n:'Белый',sw:'#e8e8ec',m:[[120,124,130],[226,228,232],[255,255,255]]},dark:{n:'Тёмный',sw:'#3a3340',m:[[10,8,12],[44,38,50],[96,88,104]]},stone:{n:'Камень',p:25,sw:'#82848c',m:STONE},neon:{n:'Неон',p:45,sw:'#12bfd9',m:[[10,40,60],[0,190,220],[170,255,255]]},gold:{n:'Золото',p:75,sw:'#be8014',m:GOLD}},
+ path:{dirt:{n:'Земля',sw:'#b99a64'},stone:{n:'Булыжник',sw:'#868890',m:STONE},sand:{n:'Песок',sw:'#e0c890',m:[[150,120,70],[216,188,130],[250,232,180]]},brick:{n:'Кирпич',p:25,sw:'#a4402c',m:[[70,24,18],[164,64,44],[222,120,90]]},moon:{n:'Лунная',p:45,sw:'#6e64c0',m:MOON},gold:{n:'Золотая',p:75,sw:'#d9a21c',m:GOLD}},
+ barn:bsk(),stall:bsk(),coop:bsk(),
+ lake:{classic:{n:'Классика',sw:'#3a86d8'},turq:{n:'Бирюза',sw:'#26c6b8',w:'#26c6b8',r:'#aef5ee',a:'#d9c58a'},dusk:{n:'Сумрак',sw:'#3b4aa8',w:'#3b4aa8',r:'#8f9be0',a:'#8b7a63'},emerald:{n:'Изумруд',p:25,sw:'#1e9e5a',w:'#1e9e5a',r:'#9bf0c0',a:'#cdbf8a'},lagoon:{n:'Розовая лагуна',p:45,sw:'#e0559f',w:'#e0559f',r:'#ffc4e2',a:'#f2d9b8'},lava:{n:'Лава',p:75,sw:'#e2501c',w:'#e2501c',r:'#ffd37a',a:'#4a2a1f'}},
+ grass:{classic:{n:'Классика',sw:'#6cc24a'},autumn:{n:'Осень',sw:'#d98a2b',h:34,s:1.1,l:-.02},spring:{n:'Весна',sw:'#8fe84a',h:90,s:1.25,l:.06},sakura:{n:'Сакура',p:25,sw:'#ff9ec7',h:335,s:.9,l:.14},winter:{n:'Зима',p:45,sw:'#e6f2ff',m:[[170,190,215],[226,238,250],[255,255,255]]},night:{n:'Ночь',p:75,sw:'#14286e',m:[[8,16,50],[22,44,108],[56,86,168]]}},
+ obj:{none:{n:'Обычный',sw:'#b07a3f'},blue:{n:'Синий',sw:'#3a78d8',h:215,s:1.05,l:0},green:{n:'Зелёный',sw:'#3fa04a',h:125,s:1,l:0},purple:{n:'Фиолетовый',p:25,sw:'#8a4cc8',h:278,s:1,l:0},gold:{n:'Золотой',p:45,sw:'#d9a21c',m:GOLD},neon:{n:'Неон',p:75,sw:'#19d9d0',h:178,s:1.2,l:.1}}
+};
+function MK_WARM(H,S,L){return(H<=58||H>=335)&&S>.12&&L>.05&&L<.92}
+function MK_COL(H,S,L){return S>.2&&L>.1&&L<.9}
+function SKI(c){return SKP[c]||((S.sk&&S.sk[c])||SKDEF[c])}
+function skOwned(c,id){var d=SKD[c]&&SKD[c][id];return !!d&&(!d.p||!!(S.skn&&S.skn[c+'_'+id]))}
+function skSig(){var a=[],c;for(c in SKDEF)if(c!=='obj')a.push(SKI(c));return a.join('.')}
+function skClean(m){var r={},c;if(m)for(c in m)if(SKD[c]&&SKD[c][m[c]]&&c!=='obj')r[c]=m[c];return r}
+function rc(g,x,y,w,h,sp,mk){
+  if(!sp||(!sp.m&&sp.h===undefined))return;x=Math.max(0,x|0);y=Math.max(0,y|0);var cw=g.canvas.width,ch=g.canvas.height;w=Math.min(w|0,cw-x);h=Math.min(h|0,ch-y);if(w<=0||h<=0)return;
+  var im=g.getImageData(x,y,w,h),d=im.data,i,r,gg,b,mx,mn,H,Sx,L,dd,t,c0,c1,hit=[],lo=9,hi=-9;
+  for(i=0;i<d.length;i+=4){if(d[i+3]<10)continue;r=d[i]/255;gg=d[i+1]/255;b=d[i+2]/255;mx=Math.max(r,gg,b);mn=Math.min(r,gg,b);L=(mx+mn)/2;dd=mx-mn;Sx=dd?dd/(1-Math.abs(2*L-1)):0;H=0;
+    if(dd){H=mx===r?((gg-b)/dd)%6:mx===gg?(b-r)/dd+2:(r-gg)/dd+4;H*=60;if(H<0)H+=360}
+    if(mk&&!mk(H,Sx,L))continue;
+    t=.3*r+.59*gg+.11*b;if(t<lo)lo=t;if(t>hi)hi=t;hit.push(i,H,Sx,L,t)}
+  var span=Math.max(.05,hi-lo),k;
+  for(k=0;k<hit.length;k+=5){i=hit[k];H=hit[k+1];Sx=hit[k+2];L=hit[k+3];t=hit[k+4];
+    if(sp.m){t=Math.min(1,Math.max(0,(t-lo)/span));if(t<.5){c0=sp.m[0];c1=sp.m[1];t*=2}else{c0=sp.m[1];c1=sp.m[2];t=(t-.5)*2}
+      d[i]=c0[0]+(c1[0]-c0[0])*t;d[i+1]=c0[1]+(c1[1]-c0[1])*t;d[i+2]=c0[2]+(c1[2]-c0[2])*t}
+    else{var S2=Math.min(1,Sx*(sp.s||1)),L2=Math.max(0,Math.min(1,L+(sp.l||0))),C=(1-Math.abs(2*L2-1))*S2,hp=sp.h/60,X=C*(1-Math.abs(hp%2-1)),m0=L2-C/2,rr=0,g2=0,bb=0;
+      if(hp<1){rr=C;g2=X}else if(hp<2){rr=X;g2=C}else if(hp<3){g2=C;bb=X}else if(hp<4){g2=X;bb=C}else if(hp<5){rr=X;bb=C}else{rr=C;bb=X}
+      d[i]=(rr+m0)*255;d[i+1]=(g2+m0)*255;d[i+2]=(bb+m0)*255}}
+  g.putImageData(im,x,y)}
+function skReg(g,cat,rects,mask){var d=SKD[cat][SKI(cat)];if(!d)return;rects.forEach(function(r){rc(g,r[0],r[1],r[2],r[3],d,mask)})}
+function MK_GREEN(H,S,L){return H>=65&&H<=175&&S>.12}
+function skGrass(g){var d=SKD.grass[SKI('grass')];if(d)rc(g,0,0,MW,MH,d,MK_GREEN)}
+function skDraw(g,cat,fn,bx,by,bw,bh){var d=SKD[cat][SKI(cat)];if(!d||(!d.m&&d.h===undefined)){fn(g);return}var c=mk(bw,bh,function(g2){g2.translate(-bx,-by);fn(g2);g2.setTransform(1,0,0,1,0,0);rc(g2,0,0,bw,bh,d,MK_WARM)});g.drawImage(c,bx,by)}
+function skLake(TH){var d=SKD.lake[SKI('lake')];return d&&d.w?{water:d.w,ripple:d.r,sand:d.a}:{water:TH.water,ripple:TH.ripple,sand:TH.sand}}
+function soilSpr(){var id=SKI('soil'),k='soil'+id;return CSP[k]||(CSP[k]=mk(64,64,function(g){g.drawImage(soilSpr0(),0,0);rc(g,0,0,64,64,SKD.soil[id],null)}))}
+function oDraw(g,o,q,now){
+  var fl=o.m,x=o.x*16,y=o.y*16,cx=x+q.w*8,d=o.s&&SKD.obj[o.s];
+  if(fl){g.save();g.translate(cx,0);g.scale(-1,1);g.translate(-cx,0)}
+  if(d&&(d.m||d.h!==undefined)){var W=q.w*16+32,H=q.h*16+32,k=o.k+'|'+o.s+'|'+((now/200)|0),c=OSC[k];
+    if(!c){var n=0,z;for(z in OSC)n++;if(n>160)OSC={};c=OSC[k]=mk(W,H,function(g2){q.d(g2,16,16,q.w,q.h,now);rc(g2,0,0,W,H,d,MK_COL)})}
+    g.drawImage(c,x-16,y-16)}
+  else q.d(g,x,y,q.w,q.h,now);
+  if(fl)g.restore()}
+
+/* --- история и режим редактора --- */
+function ehPush(){EH.push(JSON.stringify([S.obj,S.stash||[],S.bl||{}]));if(EH.length>30)EH.shift()}
+function ehClear(){EH=[]}
+function ehUndo(){if(!EH.length)return toast('Нечего отменять');var a=JSON.parse(EH.pop());S.obj=a[0];S.stash=a[1];S.bl=a[2]||{};BLD=null;save();paint();toast('↩ Отменено')}
+function edBar(){var n=(S.stash||[]).length;
+  return'<div class="bld"><b>✏️ Редактор фермы</b><div class="r">Нажмите на любой предмет — поле, амбар, озеро, деревья — потом на свободное место: он переедет туда. «Поменять» меняет два предмета местами.</div><div class="br"><button class="btn alt" data-eundo="1"'+(EH.length?'':' disabled')+'>↩ Отменить</button><button class="btn alt" data-esk="1">🎨 Скины</button><button class="btn alt" data-est="1">📦 Склад'+(n?' ('+n+')':'')+'</button><button class="btn alt" data-eauto="1">🧹 Автоукладка</button><button class="btn alt" data-erall="1">↺ Всё на место</button><button class="btn" data-edit="1">✔ Готово</button></div></div>'}
+function edDraw(g,now){
+  if(!EDIT||(BLD&&BLD.mode==='place'))return;
+  var x,y,rows=BASEROW+landRows(),a=.55+.35*Math.sin(now/160),sel=BLD&&BLD.mode==='sel'?BLD:null,col=sel&&sel.sw?'rgba(90,200,255,':'rgba(255,226,90,';g.fillStyle='rgba(255,255,255,.12)';
+  for(x=0;x<=32;x++)g.fillRect(x*16,0,1,rows*16);for(y=0;y<=rows;y++)g.fillRect(0,y*16,MW,1);
+  g.fillStyle='rgba(110,0,0,.22)';bkPx().forEach(function(b){g.fillRect(b[0],b[1],b[2],b[3])});
+  bAll().forEach(function(b){var r=bkRect(b),big=!b.k;g.fillStyle=big?'rgba(70,150,255,.10)':'rgba(255,220,90,.26)';g.fillRect(r[0]*16,r[1]*16,r[2]*16,r[3]*16);g.strokeStyle=big?'rgba(120,190,255,.75)':'rgba(255,230,120,.6)';g.lineWidth=1;g.strokeRect(r[0]*16+.5,r[1]*16+.5,r[2]*16-1,r[3]*16-1);if(big)tag(g,b.n,r[0]*16+r[2]*8,r[1]*16+r[3]*8)});
+  if(sel){g.strokeStyle=col+a+')';g.lineWidth=3;
+    if(sel.b){var r2=bkRect(bkDef(sel.b));g.strokeRect(r2[0]*16-1,r2[1]*16-1,r2[2]*16+2,r2[3]*16+2)}
+    else{var o=S.obj[sel.i],d=o&&OBJ_BY[o.k];if(d)g.strokeRect(o.x*16-1,o.y*16-1,d.w*16+2,d.h*16+2)}}}
+function edMoveTo(x,y){
+  if(BLD&&BLD.b)return bkMoveTo(x,y);
+  var o=S.obj[BLD.i],d=o&&OBJ_BY[o.k];if(!d)return false;
+  var col=Math.round(x/16-d.w/2),row=Math.round(y/16-d.h/2);col=Math.max(0,Math.min(32-d.w,col));row=Math.max(0,Math.min(BASEROW+landRows()-d.h,row));
+  if(cellOk(col,row,d.w,d.h,o)){ehPush();o.x=col;o.y=row;save();bldUpdate();return true}
+  toast('Тут занято');return true}
+function edSel(){return BLD&&BLD.mode==='sel'?S.obj[BLD.i]:null}
+function edFlip(){var o=edSel();if(!o)return;ehPush();o.m=o.m?0:1;save();paint()}
+function edCopy(){var o=edSel();if(!o)return;var src=o;buyObj(o.k);if(BLD&&BLD.mode==='place'){BLD.s=src.s;BLD.fl=src.m}}
+function edStash(){var o=edSel();if(!o)return;ehPush();var c=JSON.parse(JSON.stringify(o));delete c.x;delete c.y;S.stash=S.stash||[];S.stash.push(c);S.obj.splice(BLD.i,1);BLD=null;save();paint();toast('📦 Убрано на склад')}
+function edAuto(){
+  if(!S.obj.length)return toast('Построек пока нет');
+  var old=S.obj,cp=old.map(function(o){return JSON.parse(JSON.stringify(o))}).sort(function(a,b){var A=OBJ_BY[a.k],B=OBJ_BY[b.k];return B.w*B.h-A.w*A.h}),ok=1;
+  ehPush();S.obj=[];
+  cp.forEach(function(o){if(!ok)return;var d=OBJ_BY[o.k],f=findFree(d);if(!f){ok=0;return}o.x=f[0];o.y=f[1];S.obj.push(o)});
+  if(!ok){S.obj=old;EH.pop();return toast('Не хватило места — расширьте землю')}
+  BLD=null;save();paint();toast('🧹 Постройки аккуратно расставлены')}
+function stashOpen(){
+  var ov=document.getElementById('stov');if(ov)ov.remove();ov=document.createElement('div');ov.id='stov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,10,5,.82);z-index:9997;display:flex;align-items:center;justify-content:center;padding:14px';
+  ov.innerHTML='<div style="background:var(--panel);border:4px solid var(--ink);padding:14px;width:100%;max-width:420px;max-height:90vh;overflow:auto"></div>';
+  document.body.appendChild(ov);stashRender();
+  ov.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button[data-sp]');if(!b){if(e.target===ov)ov.remove();return}
+    var a=b.dataset.sp;if(a==='x'){ov.remove();return}
+    if(a.indexOf('p:')===0){var i=+a.slice(2),c=(S.stash||[])[i],d=c&&OBJ_BY[c.k];if(!d)return;var f=findFree(d);if(!f)return toast('Нет места — расширьте землю');ov.remove();BLD={mode:'place',k:c.k,stash:i,col:f[0],row:f[1],ok:1};tab='farm';paint();scrollLand()}})}
+function stashRender(){var ov=document.getElementById('stov');if(!ov)return;var l=S.stash||[],h='<b style="font-size:11px">📦 Склад</b><div class="r" style="margin:6px 0 10px">Здесь хранятся постройки, которые вы убрали с фермы. Ставить их обратно бесплатно.</div>';
+  if(!l.length)h+='<p class="empty">Склад пуст.</p>';
+  l.forEach(function(c,i){var d=OBJ_BY[c.k];if(!d)return;h+='<div class="card"><img class="op" src="'+oPrev(d)+'" alt=""><div class="t">'+d.n+'<div class="r">'+d.w+'×'+d.h+(c.s?' · скин: '+(SKD.obj[c.s]?SKD.obj[c.s].n:''):'')+'</div></div><button class="btn" data-sp="p:'+i+'">Поставить</button></div>'});
+  ov.firstChild.innerHTML=E(h+'<button class="btn alt" data-sp="x" style="width:100%;margin-top:8px">Закрыть</button>')}
+
+/* --- окно скинов --- */
+(function(){var st=document.createElement('style');st.textContent='.skt{display:flex;gap:6px;overflow-x:auto;margin-bottom:8px;padding-bottom:4px}.skt .btn{flex-shrink:0}.skg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.skb{border:3px solid var(--ink);background:#fff3d6;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;font:inherit;color:var(--ink);cursor:pointer;min-height:92px}.skb i{width:34px;height:34px;border:3px solid var(--ink);display:block}.skb span{font-size:9px;text-align:center}.skb small{font-size:8px;opacity:.85}.skb.on{background:#ffe27a;outline:3px solid #3fae2a}';document.head.appendChild(st)})();
+function skCur(c){if(c==='obj'){var o=S.obj[SKTGT];return o&&o.s?o.s:'none'}return(S.sk&&S.sk[c])||SKDEF[c]}
+function skClr(){if(SKPV&&SKPV.c==='obj'){var o=S.obj[SKTGT];if(o){if(SKPV.prev)o.s=SKPV.prev;else delete o.s}}SKP={};SKPV=null}
+function skOpen(cat,tgt){
+  SKCAT=cat;SKTGT=tgt;skClr();var ov=document.getElementById('skov');if(ov)ov.remove();
+  ov=document.createElement('div');ov.id='skov';
+  ov.style.cssText='position:fixed;left:0;right:0;bottom:0;max-height:52vh;overflow:auto;z-index:9996;background:var(--panel);border-top:4px solid var(--ink);padding:12px;box-shadow:0 -6px 0 rgba(0,0,0,.25)';
+  document.body.appendChild(ov);ov.addEventListener('click',skClick);skRender()}
+function skRender(){
+  var ov=document.getElementById('skov');if(!ov)return;var c=SKCAT,h='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b style="font-size:11px">🎨 '+(SKTGT>=0?'Скин постройки':'Скины фермы')+'</b><button class="btn alt" data-skx="1">Готово</button></div>';
+  if(SKTGT<0)h+='<div class="skt">'+SKO.map(function(k){return'<button class="btn'+(k===c?'':' alt')+'" data-skc="'+k+'">'+SKN[k]+'</button>'}).join('')+'</div>';
+  var cur=skCur(c),pv=SKPV&&SKPV.c===c?SKPV.id:null;
+  h+='<div class="skg">'+Object.keys(SKD[c]).map(function(id){var d=SKD[c][id],own=skOwned(c,id),on=(pv||cur)===id;
+    return'<button class="skb'+(on?' on':'')+'" data-sk="'+id+'"><i style="background:'+d.sw+'"></i><span>'+d.n+'</span><small>'+(on?(own?'✓ надето':'👁 осмотр'):own?(d.p?'куплено':'бесплатно'):'⭐ '+d.p)+'</small></button>'}).join('')+'</div>';
+  if(pv&&!skOwned(c,pv))h+='<div class="r" style="margin:8px 0 4px">Это предпросмотр: на ферме скин виден, но пока не ваш.</div><button class="btn" data-skb="'+pv+'" style="width:100%">⭐ '+SKD[c][pv].p+' · Купить «'+SKD[c][pv].n+'»</button>';
+  ov.innerHTML=E(h)}
+function skClick(e){
+  var b=e.target.closest&&e.target.closest('button');if(!b)return;var d=b.dataset;
+  if(d.skx){skClr();var ov=document.getElementById('skov');if(ov)ov.remove();BLD=null;paint();return}
+  if(d.skc){skClr();SKCAT=d.skc;skRender();return}
+  if(d.sk){var c=SKCAT,id=d.sk;
+    if(skOwned(c,id)){skClr();if(c==='obj'){var o=S.obj[SKTGT];if(o){ehPush();if(id==='none')delete o.s;else o.s=id}}else{(S.sk||(S.sk={}))[c]=id}save()}
+    else{skClr();if(c==='obj'){var o2=S.obj[SKTGT];if(o2){SKPV={c:c,id:id,prev:o2.s||''};o2.s=id}}else{SKP[c]=id;SKPV={c:c,id:id}}}
+    skRender();return}
+  if(d.skb){SKBUY={c:SKCAT,id:d.skb,i:SKTGT};buySku('skin_'+SKCAT+'_'+d.skb)}}
+var _paint0=paint;paint=function(){if(tab!=='farm'){var o=document.getElementById('skov');if(o){skClr();o.remove()}}_paint0()};
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button');if(!b)return;var d=b.dataset;
+  if(d.edit){EDIT=EDIT?0:1;BLD=null;tab='farm';paint()}
+  else if(d.eundo)ehUndo();
+  else if(d.esk)skOpen('soil',-1);
+  else if(d.est)stashOpen();
+  else if(d.eauto)edAuto();
+  else if(d.erall)edBkAll();
+  else if(d.esw){if(BLD&&BLD.mode==='sel'){BLD.sw=BLD.sw?0:1;bldUpdate()}}
+  else if(d.ebh)edBkHide();
+  else if(d.ebr)edBkReset();
+  else if(d.efl)edFlip();
+  else if(d.ecp)edCopy();
+  else if(d.esh)edStash();
+  else if(d.esk1){var o=edSel();if(o)skOpen('obj',BLD.i)}});
+
+/* ===== БЛОКИ ФЕРМЫ: поле, амбар, двор, лавка, озеро, загон и декор можно двигать и менять местами ===== */
+var BDEF=[{id:'field',n:'Поле',r:[0,6,18,18]},{id:'barn',n:'Амбар',r:[21,0,10,9]},{id:'yard',n:'Двор',r:[20,9,12,9]},{id:'stall',n:'Лавка',r:[20,18,9,7]},{id:'lake',n:'Озеро',r:[0,29,9,11]},{id:'pasture',n:'Загон',r:[10,28,22,19]}];
+var DDEF=[{id:'t1',k:'tree',p:[40,92],r:[2,4,2,2],f:1},{id:'t2',k:'tree',p:[104,92],r:[6,4,2,2],f:1},{id:'t3',k:'tree',p:[168,92],r:[10,4,2,2],f:1},{id:'t4',k:'tree',p:[232,92],r:[14,4,2,2],f:1},
+{id:'t5',k:'tree',p:[22,748],r:[0,45,2,2]},{id:'t6',k:'tree',p:[96,756],r:[5,46,2,2]},{id:'t7',k:'tree',p:[150,744],r:[8,45,2,2]},{id:'t8',k:'tree',p:[506,762],r:[31,47,1,1]},
+{id:'b1',k:'bush',p:[196,452],r:[12,27,2,1]},{id:'b2',k:'bush',p:[410,452],r:[25,27,2,1]},{id:'b3',k:'bush',p:[40,456],r:[2,28,2,1]},{id:'b4',k:'bush',p:[320,760],r:[19,47,2,1]},{id:'b5',k:'bush',p:[250,764],r:[15,47,2,1]},{id:'b6',k:'bush',p:[484,436],r:[30,27,2,1]},
+{id:'hy',k:'hay',p:[326,146],r:[20,8,1,1]},{id:'cr',k:'crate',p:[470,356],r:[29,22,1,1]},{id:'br',k:'barrel',p:[500,358],r:[31,22,1,1]},
+{id:'r1',k:'rock',p:[152,470],r:[9,29,1,1]},{id:'r2',k:'rock',p:[26,640],r:[1,40,1,1]},{id:'r3',k:'rock',p:[150,636],r:[9,39,1,1]}];
+var DN={tree:'Деревце',bush:'Куст',hay:'Стог сена',crate:'Ящик',barrel:'Бочка',rock:'Валун'};
+var FIXR=[[18,0,2,27],[0,25,32,2]],ENTSG='';
+function bkOff(id){var a=S.bl&&S.bl[id];return a?[(a[0]|0)*16,(a[1]|0)*16]:[0,0]}
+function bkDef(id){var i;for(i=0;i<BDEF.length;i++)if(BDEF[i].id===id)return BDEF[i];for(i=0;i<DDEF.length;i++)if(DDEF[i].id===id)return DDEF[i]}
+function bkRect(b){var o=bkOff(b.id);return[b.r[0]+o[0]/16,b.r[1]+o[1]/16,b.r[2],b.r[3]]}
+function bkSig(){var s2='',k,bl=S.bl||{};for(k in bl)s2+=k+':'+bl[k].join(',')+';';return s2}
+function bAll(){var L=[],f=wid()==='farm',bl=S.bl||{};BDEF.forEach(function(b){L.push(b)});DDEF.forEach(function(d){if(d.f&&!f)return;var a=bl[d.id];if(a&&a[2])return;L.push(d)});return L}
+function blClean(b){var o={},k,d,a;if(!b||typeof b!=='object')return o;for(k in b){d=bkDef(k);a=b[k];if(!d||!Array.isArray(a))continue;var dx=Math.max(-40,Math.min(40,a[0]|0)),dy=Math.max(-100,Math.min(100,a[1]|0)),h=a[2]&&d.k;if(dx||dy||h)o[k]=h?[dx,dy,1]:[dx,dy]}return o}
+function rectFree(c,r,w,h,ig,soft){
+  ig=ig||[];if(c<0||r<0||c+w>32||r+h>BASEROW+landRows())return false;
+  var k,b,i,o,d,L;
+  for(k=0;k<FIXR.length;k++){b=FIXR[k];if(c<b[0]+b[2]&&c+w>b[0]&&r<b[1]+b[3]&&r+h>b[1])return false}
+  if(wid()!=='farm'&&c<18&&r<6)return false;
+  L=bAll();for(k=0;k<L.length;k++){if(ig.indexOf(L[k].id)>=0||(soft&&L[k].k))continue;b=bkRect(L[k]);if(c<b[0]+b[2]&&c+w>b[0]&&r<b[1]+b[3]&&r+h>b[1])return false}
+  for(i=0;i<S.obj.length;i++){o=S.obj[i];d=OBJ_BY[o.k];if(!d||ig.indexOf(o)>=0)continue;if(c<o.x+d.w&&c+w>o.x&&r<o.y+d.h&&r+h>o.y)return false}
+  return true}
+function bkPx(){var a=FIXR.map(function(f){return[f[0]*16,f[1]*16,f[2]*16,f[3]*16]});if(wid()!=='farm')a.push([0,0,288,96]);return a}
+function bkRed(g){bkPx().forEach(function(b){g.fillRect(b[0],b[1],b[2],b[3])});bAll().forEach(function(b){var r=bkRect(b);g.fillRect(r[0]*16,r[1]*16,r[2]*16,r[3]*16)})}
+function bkIn(g,id,fn){var o=bkOff(id);g.save();g.translate(o[0],o[1]);fn(g);g.restore()}
+function skDo(g,cat,id,fn,bx,by,bw,bh){var o=bkOff(id);skDraw(g,cat,function(g2){g2.save();g2.translate(o[0],o[1]);fn(g2);g2.restore()},bx+o[0],by+o[1],bw,bh)}
+function bkAt(x,y){var L=bAll(),i,b,r,up;
+  for(i=L.length-1;i>=0;i--){b=L[i];if(!b.k)continue;r=bkRect(b);up=b.k==='tree'?44:12;if(x>=r[0]*16-6&&x<(r[0]+r[2])*16+6&&y>=r[1]*16-up&&y<(r[1]+r[3])*16+4)return b.id}
+  for(i=L.length-1;i>=0;i--){b=L[i];if(b.k)continue;r=bkRect(b);if(x>=r[0]*16&&x<(r[0]+r[2])*16&&y>=r[1]*16&&y<(r[1]+r[3])*16)return b.id}
+  return null}
+function bkPut(id,c,r){var b=bkDef(id),a=S.bl&&S.bl[id],dx=c-b.r[0],dy=r-b.r[1],h=a&&a[2];S.bl=S.bl||{};if(!dx&&!dy&&!h)delete S.bl[id];else S.bl[id]=h?[dx,dy,1]:[dx,dy]}
+function itCell(it){if(it.t==='o'){var o=S.obj[it.i],d=OBJ_BY[o.k];return[o.x,o.y,d.w,d.h]}return bkRect(bkDef(it.id))}
+function itPut(it,c,r){if(it.t==='o'){var o=S.obj[it.i];o.x=c;o.y=r}else bkPut(it.id,c,r)}
+function itIg(it){return it.t==='o'?S.obj[it.i]:it.id}
+function itSame(a,b){return a.t===b.t&&(a.t==='o'?a.i===b.i:a.id===b.id)}
+function nearFree(w,h,tc,tr,ig,soft){var best=null,bd=1e9,rows=BASEROW+landRows(),c,r,d;
+  for(r=0;r+h<=rows;r++)for(c=0;c+w<=32;c++){d=Math.abs(c-tc)+Math.abs(r-tr);if(d<bd&&rectFree(c,r,w,h,ig,soft)){bd=d;best=[c,r]}}
+  return best}
+function bkMoveTo(x,y){var b=bkDef(BLD.b),r=bkRect(b),c=Math.round(x/16-r[2]/2),rw=Math.round(y/16-r[3]/2);
+  c=Math.max(0,Math.min(32-r[2],c));rw=Math.max(0,Math.min(BASEROW+landRows()-r[3],rw));
+  if(c===r[0]&&rw===r[1])return true;
+  if(rectFree(c,rw,r[2],r[3],[b.id],!b.k)){ehPush();bkPut(b.id,c,rw);if(!b.k)fixDecor();save();bldUpdate();return true}
+  toast('Тут занято');return true}
+function edSwap(A,B){
+  var a=itCell(A),b=itCell(B),pa,pb,sa=A.t==='b'&&!bkDef(A.id).k,sb=B.t==='b'&&!bkDef(B.id).k;ehPush();
+  pa=nearFree(a[2],a[3],b[0]+Math.round((b[2]-a[2])/2),b[1]+Math.round((b[3]-a[3])/2),[itIg(A),itIg(B)],sa);
+  if(!pa){EH.pop();toast('Не помещается — освободите место');return true}
+  itPut(A,pa[0],pa[1]);
+  pb=nearFree(b[2],b[3],a[0]+Math.round((a[2]-b[2])/2),a[1]+Math.round((a[3]-b[3])/2),[itIg(B)],sb);
+  if(!pb){itPut(A,a[0],a[1]);EH.pop();toast('Не помещается — освободите место');return true}
+  itPut(B,pb[0],pb[1]);if(sa||sb)fixDecor();if(BLD)BLD.sw=0;save();toast('⇄ Поменяли местами');bldUpdate();return true}
+function edTap(x,y,i){
+  var sel=BLD&&BLD.mode==='sel'?BLD:null,hit=null,bk;
+  if(i>=0)hit={t:'o',i:i};else{bk=bkAt(x,y);if(bk)hit={t:'b',id:bk}}
+  if(sel&&sel.sw){
+    if(!hit){toast('Нажмите на предмет, с которым поменять');return true}
+    var A=sel.b?{t:'b',id:sel.b}:{t:'o',i:sel.i};
+    if(itSame(A,hit)){sel.sw=0;bldUpdate();return true}
+    return edSwap(A,hit)}
+  if(hit){
+    if(sel&&(sel.b?(hit.t==='b'&&hit.id===sel.b):(hit.t==='o'&&hit.i===sel.i)))return edMoveTo(x,y);
+    BLD=hit.t==='o'?{mode:'sel',i:hit.i}:{mode:'sel',b:hit.id};bldUpdate();return true}
+  if(sel)return edMoveTo(x,y);
+  return false}
+function fixDecor(){bAll().forEach(function(d){if(!d.k)return;var r=bkRect(d);if(!rectFree(r[0],r[1],r[2],r[3],[d.id])){var f=nearFree(r[2],r[3],r[0],r[1],[d.id]);if(f)bkPut(d.id,f[0],f[1])}})}
+function fixObjs(){S.obj.forEach(function(o){var d=OBJ_BY[o.k];if(d&&!rectFree(o.x,o.y,d.w,d.h,[o])){var f=findFree(d,o);if(f){o.x=f[0];o.y=f[1]}}})}
+function edBkHide(){if(!BLD||!BLD.b)return;var b=bkDef(BLD.b);if(!b.k)return;var a=S.bl&&S.bl[b.id]||[0,0];ehPush();S.bl=S.bl||{};S.bl[b.id]=[a[0],a[1],1];BLD=null;save();paint();toast('🗑 Убрано. «Всё на место» вернёт')}
+function edBkReset(){if(!BLD||!BLD.b)return;var b=bkDef(BLD.b),o=S.bl&&S.bl[b.id];if(!o)return;
+  if(!rectFree(b.r[0],b.r[1],b.r[2],b.r[3],[b.id]))return toast('Родное место занято');
+  ehPush();delete S.bl[b.id];BLD=null;save();paint();toast('↺ Вернули на место')}
+function edBkAll(){if(!S.bl||!Object.keys(S.bl).length)return toast('Всё уже на местах');ehPush();S.bl={};fixObjs();BLD=null;save();paint();toast('↺ Всё на своих местах')}
+function bkBar(){var b=bkDef(BLD.b),a=S.bl&&S.bl[b.id];
+  return'<div class="bld"><b>'+(b.n||DN[b.k])+'</b><div class="r">'+(BLD.sw?'Нажмите на предмет, с которым поменять местами.':'Нажмите на свободное место — переедет туда. Или «Поменять» и выберите, с чем.')+'</div><div class="br"><button class="btn'+(BLD.sw?'':' alt')+'" data-esw="1">⇄ Поменять</button>'+(a&&(a[0]||a[1]||a[2])?'<button class="btn alt" data-ebr="1">↺ На место</button>':'')+(b.k?'<button class="btn alt" data-ebh="1">🗑 Убрать</button>':'')+'<button class="btn alt" data-bcn="1">Закрыть</button></div></div>'}
 function buildBG(){BG=bgFor()}
 function mkBG(){var TH=THEMES[wid()];return mk(MW,MH,function(g){
-  var r=rng(11),i,x,y,k;
+  var r=rng(11),i,x,y,k,o,LK;
   for(y=0;y<MH;y+=16)for(x=0;x<MW;x+=16){var v=r();tl(g,v<.8?'tile-grass-1':(v<.93?'tile-grass-2':'tile-grass-3'),x,y)}
   if(TH.tint)tint(g,TH.tint[0],TH.tint[1],MW,MH);
+  skGrass(g);
   auto(g,'tile-path-',cellsFrom([[288,0,32,432],[0,400,512,32]]));
-  auto(g,'tile-soil-',cellsFrom([[16,112,256,256]]));
-  for(x=0;x<288;x+=16){if(x<128||x>=160)tl(g,x%64?'fence-h':'fence-h-post',x,96);tl(g,x%64?'fence-h':'fence-h-post',x,368)}
+  skReg(g,'path',[[288,0,32,432],[0,400,512,32]],MK_WARM);
+  /* поле */
+  o=bkOff('field');bkIn(g,'field',function(g){auto(g,'tile-soil-',cellsFrom([[16,112,256,256]]))});
+  skReg(g,'soil',[[16+o[0],112+o[1],256,256]],MK_WARM);
+  skDo(g,'fence','field',function(g){for(x=0;x<288;x+=16){if(x<128||x>=160)tl(g,x%64?'fence-h':'fence-h-post',x,96);tl(g,x%64?'fence-h':'fence-h-post',x,368)}
   for(y=112;y<368;y+=16){tl(g,y%64?'fence-v':'fence-v-post',0,y);if(y<224||y>=256)tl(g,y%64?'fence-v':'fence-v-post',272,y)}
-  tl(g,'gate-open',128,96);tl(g,'gate-open',144,96);tl(g,'gate-open',272,224);tl(g,'gate-open',272,240);
-  /* пруд */
-  pell(g,TH.sand,72,552,78,88);pell(g,TH.water,72,552,72,82);
-  for(i=0;i<60;i++){var px=r()*130+8|0,py=r()*150+475|0;if(Math.pow((px-72)/68,2)+Math.pow((py-552)/78,2)<1)R(g,TH.ripple,px,py,6,1)}
+  tl(g,'gate-open',128,96);tl(g,'gate-open',144,96);tl(g,'gate-open',272,224);tl(g,'gate-open',272,240)},-8,90,310,300);
+  /* озеро */
+  LK=skLake(TH);bkIn(g,'lake',function(g){pell(g,LK.sand,72,552,78,88);pell(g,LK.water,72,552,72,82);
+    for(i=0;i<60;i++){var px=r()*130+8|0,py=r()*150+475|0;if(Math.pow((px-72)/68,2)+Math.pow((py-552)/78,2)<1)R(g,LK.ripple,px,py,6,1)}});
   /* двор */
-  auto(g,'tile-path-',cellsFrom([[336,160,160,128]]));
-  drawCoop(g,436,166);
-  fenceH(g,336,152,160);fenceH(g,336,280,160);fenceV(g,494,160,128);fenceV(g,334,160,48);fenceV(g,334,240,48);
+  bkIn(g,'yard',function(g){auto(g,'tile-path-',cellsFrom([[336,160,160,128]]))});
+  skDo(g,'coop','yard',function(g){drawCoop(g,436,166)},428,154,80,70);
+  bkIn(g,'yard',function(g){fenceH(g,336,152,160);fenceH(g,336,280,160);fenceV(g,494,160,128);fenceV(g,334,160,48);fenceV(g,334,240,48)});
   /* загон */
-  
-  spr(g,'hay-bale',452,506,2);spr(g,'hay-bale',484,510,2);
-  R(g,'#3a2417',430,716,52,14);R(g,'#7d4a22',432,718,48,10);R(g,'#3a86d8',434,720,44,4);
-  fenceH(g,176,456,112);fenceH(g,320,456,176);fenceH(g,176,736,320);fenceV(g,174,464,272);fenceV(g,494,464,272);
-  drawBarn(g,344,12);drawStall(g,338,306);
-  /* деревья и кусты */
-  (wid()==='farm'?[[40,92],[104,92],[168,92],[232,92],[22,748],[96,756],[150,744],[506,762]]:[[22,748],[96,756],[150,744],[506,762]]).forEach(function(q){TH.tree(g,q[0],q[1])});if(wid()!=='farm')TH.extra(g);
-  [[196,452],[410,452],[40,456],[320,760],[250,764],[484,436]].forEach(function(q){TH.bush(g,q[0],q[1])});
-  spr(g,'hay-bale',326,146,2);spr(g,'crate',470,356,2);spr(g,'barrel',500,358,2);TH.rock(g,152,470);TH.rock(g,26,640);TH.rock(g,150,636);
-  var blk=[[0,90,296,300],[286,0,34,440],[0,398,512,36],[326,0,186,150],[326,150,176,160],[330,300,120,90],[0,450,150,200],[170,450,340,300]];
+  bkIn(g,'pasture',function(g){spr(g,'hay-bale',452,506,2);spr(g,'hay-bale',484,510,2);
+    R(g,'#3a2417',430,716,52,14);R(g,'#7d4a22',432,718,48,10);R(g,'#3a86d8',434,720,44,4)});
+  skDo(g,'fence','pasture',function(g){fenceH(g,176,456,112);fenceH(g,320,456,176);fenceH(g,176,736,320);fenceV(g,174,464,272);fenceV(g,494,464,272)},160,448,356,312);
+  skDo(g,'barn','barn',function(g){drawBarn(g,344,12)},336,4,156,140);skDo(g,'stall','stall',function(g){drawStall(g,338,306)},330,298,120,90);
+  /* декор: деревья, кусты, камни, ящики */
+  if(wid()!=='farm')TH.extra(g);
+  var DL=bAll().filter(function(b){return b.k});DL.sort(function(a,b){return a.p[1]+bkOff(a.id)[1]-(b.p[1]+bkOff(b.id)[1])});
+  DL.forEach(function(d){var oo=bkOff(d.id),dx=d.p[0]+oo[0],dy=d.p[1]+oo[1];
+    if(d.k==='tree')TH.tree(g,dx,dy);else if(d.k==='bush')TH.bush(g,dx,dy);else if(d.k==='rock')TH.rock(g,dx,dy);
+    else spr(g,d.k==='hay'?'hay-bale':d.k,dx,dy,2)});
+  var blk=[[286,0,34,440],[0,398,512,36]];bAll().forEach(function(b){var q=bkRect(b);blk.push([q[0]*16,q[1]*16,q[2]*16,q[3]*16])});if(wid()!=='farm')blk.push([0,0,288,96]);
   for(i=0;i<70;i++){x=8+r()*496|0;y=30+r()*720|0;var ok=1;for(k=0;k<blk.length;k++){var b=blk[k];if(x>b[0]-6&&x<b[0]+b[2]+6&&y>b[1]-6&&y<b[1]+b[3]+6){ok=0;break}}if(ok)TH.flower(g,x,y)}
 })}
-function soilSpr(){return CSP.soil||(CSP.soil=mk(64,64,function(g){R(g,'#4d2d14',0,0,64,64);R(g,'#6e4222',2,2,60,60);for(var k=0;k<3;k++){R(g,'#55331a',4,12+k*18,56,3);R(g,'#8a5a30',4,15+k*18,56,1)}var r=rng(5);for(var i=0;i<30;i++)R(g,'#5a3419',4+(r()*56|0),4+(r()*54|0),2,1)}))}
+function soilSpr_o1(){return CSP.soil||(CSP.soil=mk(64,64,function(g){R(g,'#4d2d14',0,0,64,64);R(g,'#6e4222',2,2,60,60);for(var k=0;k<3;k++){R(g,'#55331a',4,12+k*18,56,3);R(g,'#8a5a30',4,15+k*18,56,1)}var r=rng(5);for(var i=0;i<30;i++)R(g,'#5a3419',4+(r()*56|0),4+(r()*54|0),2,1)}))}
 function lockSpr(){return CSP.lock||(CSP.lock=mk(64,64,function(g){R(g,'#5c6b3a',0,0,64,64);R(g,'#9bb465',2,2,60,60);for(var k=2;k<62;k+=8){R(g,'#7d9650',k,2,4,2);R(g,'#7d9650',k,60,4,2);R(g,'#7d9650',2,k,2,4);R(g,'#7d9650',60,k,2,4)}}))}
 function pWheat(g,x,b,s){var h=[5,9,13,16][s],o,c;for(o=-4;o<=4;o+=4){R(g,'#5fa83a',x+o,b-h,1,h);if(s>=1){c=s>=3?'#f2c53a':(s===2?'#c4c84a':'#8fc04a');R(g,c,x+o-1,b-h-(s>=2?5:2),3,s>=2?6:3);if(s===3)R(g,'#fbe27a',x+o,b-h-5,1,5)}}}
 function pCarrot(g,x,b,s){var h=[4,7,10,11][s];R(g,'#4caf3a',x-1,b-h,3,h);R(g,'#5fc84a',x-4,b-h+1,2,h-3);R(g,'#5fc84a',x+3,b-h+1,2,h-3);if(s>=2)R(g,'#f28a1c',x-2,b-2,5,3);if(s===3){R(g,'#f28a1c',x-3,b-3,7,4);R(g,'#c4600d',x-3,b,7,1)}}
@@ -769,7 +987,7 @@ function pStraw(g,x,b,s){var h=[3,5,7,8][s];R(g,'#2f7d32',x-6,b-h,12,h);R(g,'#5f
 var PF={wheat:pWheat,carrot:pCarrot,corn:pCorn,pumpkin:pPump,strawb:pStraw};
 function cropSpr(id,s){var k=id+s;return CSP[k]||(CSP[k]=mk(64,64,function(g){g.drawImage(soilSpr(),0,0);for(var j=0;j<3;j++)for(var i=0;i<3;i++)PF[id](g,12+i*20,20+j*18,s)}))}
 var PX=[32,112,192],PY=[128,208,288];
-function plotXY(i){return[PX[i%3],PY[Math.floor(i/3)]]}
+function plotXY(i){var o=bkOff('field');return[PX[i%3]+o[0],PY[Math.floor(i/3)]+o[1]]}
 function tag(g,t,x,y){t=T(t);g.font='8px "Press Start 2P",monospace';g.textAlign='center';var w=g.measureText(t).width;R(g,'#3a2417',x-w/2-6,y-9,w+12,16);R(g,'#fff3d6',x-w/2-4,y-7,w+8,12);g.fillStyle='#3a2417';g.fillText(t,x,y+1)}
 function drawPlots(g,now){
   var i,xy,x,y,p,s,c,st,oy;
@@ -789,9 +1007,10 @@ function drawPlots(g,now){
 }
 function mkE(t,a,v){var e={t:t,a:a,v:v||0,x:a[0]+Math.random()*(a[2]-a[0]),y:a[1]+Math.random()*(a[3]-a[1]),wait:Math.random()*2000,d:Math.random()<.5?1:-1,fa:0,f:0,mv:0};e.tx=e.x;e.ty=e.y;return e}
 function initEnt(){
-  ENT=[mkE('hen',[346,190,486,274],0),mkE('hen',[346,190,486,274],1),
-  mkE('cow',[190,500,420,720]),mkE('sheep',[190,500,420,720]),mkE('pig',[190,500,420,720]),mkE('rabbit',[190,500,420,720]),mkE('turkey',[190,500,420,720]),mkE('duck',[190,500,420,720]),
-  mkE('cat',[344,140,420,160]),mkE('dog',[330,440,500,452]),
+  var Y=bkOff('yard'),P=bkOff('pasture'),B=bkOff('barn'),yz=[346+Y[0],190+Y[1],486+Y[0],274+Y[1]],pz=[190+P[0],500+P[1],420+P[0],720+P[1]];
+  ENT=[mkE('hen',yz,0),mkE('hen',yz,1),
+  mkE('cow',pz),mkE('sheep',pz),mkE('pig',pz),mkE('rabbit',pz),mkE('turkey',pz),mkE('duck',pz),
+  mkE('cat',[344+B[0],140+B[1],420+B[0],160+B[1]]),mkE('dog',[330+P[0],440+P[1],500+P[0],452+P[1]]),
   mkE('farmer',[0,0,0,0]),mkE('farmer',[0,0,0,0]),mkE('farmer',[0,0,0,0]),mkE('farmer',[0,0,0,0])];
   var f=ENT.slice(-4);f[0].x=304;f[0].y=60;f[1].x=300;f[1].y=300;f[2].x=120;f[2].y=416;f[3].x=420;f[3].y=412;f.forEach(function(e){e.tx=e.x;e.ty=e.y})
 }
@@ -909,7 +1128,7 @@ function dJelly(g,x,y,d,f,now,e){var h=34+Math.sin(now/600+e.ph)*9;R(g,'rgba(0,0
 var WDRAW={crab:dCrab,turtle:dTurtle,gull:dGull,jelly:dJelly,raptor:dRaptor,trike:dTrike,bronto:dBronto,ptero:dPtero,frog:dFrog,croc:dCroc,dfly:dDfly,rbdog:dRbdog,cbot:dCbot,drone:dDrone,ufo:dUfo};
 var WFLY={gull:1,jelly:1,ptero:1,dfly:1,drone:1,ufo:1};
 function wildDefs(w){
-  var road=[10,402,500,430],land=[10,786,502,Math.max(800,MH-14)],mead=[10,640,160,735],sky=[24,70,488,Math.max(300,MH-60)],pond=[24,500,120,600];
+  var road=[10,402,500,430],land=[10,786,502,Math.max(800,MH-14)],mead=[10,640,160,735],sky=[24,70,488,Math.max(300,MH-60)],pond=(function(L){return[24+L[0],500+L[1],120+L[0],600+L[1]]})(bkOff('lake'));
   if(w==='aqua')return[['crab',land],['crab',land],['crab',mead],['crab',road],['turtle',land],['turtle',road],['gull',sky],['gull',sky],['gull',sky],['jelly',sky],['jelly',sky]];
   if(w==='dino')return[['raptor',road],['raptor',land],['trike',land],['trike',mead],['bronto',land],['ptero',sky],['ptero',sky]];
   if(w==='swamp')return[['frog',land],['frog',land],['frog',mead],['frog',road],['croc',pond],['dfly',sky],['dfly',sky],['dfly',sky]];
@@ -917,14 +1136,14 @@ function wildDefs(w){
   return[];
 }
 var WLC={};
-function wildList(){var w=wid(),k=w+':'+(S.ld||0);if(!WLC[k]){var n=0,q;for(q in WLC)n++;if(n>4)WLC={};WLC[k]=wildDefs(w).map(function(a){var e=mkE(a[0],a[1]);e.ph=Math.random()*6;e.fly=WFLY[a[0]]?1:0;return e})}return WLC[k]}
+function wildList(){var w=wid(),k=w+':'+(S.ld||0)+':'+bkSig();if(!WLC[k]){var n=0,q;for(q in WLC)n++;if(n>4)WLC={};WLC[k]=wildDefs(w).map(function(a){var e=mkE(a[0],a[1]);e.ph=Math.random()*6;e.fly=WFLY[a[0]]?1:0;return e})}return WLC[k]}
 function drawMap(now){
-  BG=bgFor();if(!ENT)initEnt();
+  BG=bgFor();var sg0=bkSig();if(!ENT||ENTSG!==sg0){initEnt();ENTSG=sg0}
   var g=MG,dt=Math.min(100,MLAST?now-MLAST:80),i,L=[];MLAST=now;
   g.drawImage(BG,0,0);
   drawPlots(g,now);
   L.push([540,function(){lakeFx(g,now)}]);
-  S.obj.forEach(function(o){var q=OBJ_BY[o.k];if(q)L.push([o.y*16+q.h*16-1,function(){q.d(g,o.x*16,o.y*16,q.w,q.h,now);if(o.k==='pond')pondFx(g,o,now)}])});
+  S.obj.forEach(function(o){var q=OBJ_BY[o.k];if(q)L.push([o.y*16+q.h*16-1,function(){oDraw(g,o,q,now);if(o.k==='pond')pondFx(g,o,now)}])});
   var WL=wildList();updE(dt,WL);
   WL.forEach(function(e){L.push([e.fly?5000+e.y:e.y,function(){WDRAW[e.t](g,e.x,e.y,e.d,e.mv?e.f:0,now,e)}])});
   updE(dt);CART.x+=dt*.045;if(CART.x>620)CART.x=-90;CARTX=CART.x;
@@ -935,9 +1154,9 @@ function drawMap(now){
   L.sort(function(a,b){return a[0]-b[0]});L.forEach(function(q){q[1]()});
   tag(g,'Участок',256,MH0+2);bldDraw(g,now);
   /* подписи и значки */
-  tag(g,'Амбар',412,148);tag(g,'Двор',416,172);tag(g,'Город',388,392);tag(g,'Заказы',Math.max(40,Math.min(472,CART.x+10)),372);tag(g,'Выпас',336,474);
+  var Bq=bkOff('barn'),Yq=bkOff('yard'),Kq=bkOff('stall'),Pq=bkOff('pasture');if(!EDIT||tab==='visit'){tag(g,'Амбар',412+Bq[0],148+Bq[1]);tag(g,'Двор',416+Yq[0],172+Yq[1]);tag(g,'Город',388+Kq[0],392+Kq[1]);tag(g,'Выпас',336+Pq[0],474+Pq[1])}tag(g,'Заказы',Math.max(40,Math.min(472,CART.x+10)),372);
   var n=Date.now();
-  if(S.pen[0]&&n>=S.pen[0]+ANIM[0].time*1000||S.pen[1]&&n>=S.pen[1]+ANIM[1].time*1000)bubble(g,416,152,'🥚',now);
+  if(S.pen[0]&&n>=S.pen[0]+ANIM[0].time*1000||S.pen[1]&&n>=S.pen[1]+ANIM[1].time*1000)bubble(g,416+Yq[0],152+Yq[1],'🥚',now);
   ENT.forEach(function(e){var s=({cow:2,sheep:3,pig:4,rabbit:5,turkey:6,duck:7})[e.t];if(s&&S.pen[s]&&n>=S.pen[s]+ANIM[s].time*1000)bubble(g,e.x,e.y-34,byId(ANIM[s].item).e,now)});
   var fx=wxType();if(fx==='snow'){R(g,'rgba(220,235,255,.18)',0,0,MW,MH);for(i=0;i<70;i++){var sx=(i*61+Math.sin(now*.001+i)*14+now*.01)%MW,sy=(i*89+now*.06)%MH;R(g,'#fff',sx|0,sy|0,3,3)}}else if(fx==='sun'){R(g,'rgba(255,214,90,.16)',0,0,MW,MH)}else if(fx==='storm'){R(g,'rgba(20,25,50,.35)',0,0,MW,MH);if((now|0)%2400<120)R(g,'rgba(255,255,255,.35)',0,0,MW,MH)}
   if(rainSlot().on){R(g,'rgba(40,70,110,.2)',0,0,MW,MH);for(i=0;i<80;i++){var rx=(i*53+now*.05)%MW,ry=(i*97+now*.45)%MH;R(g,'#cfe9ff',rx|0,ry|0,1,7)}}
@@ -945,17 +1164,18 @@ function drawMap(now){
 function inR(x,y,a,b,w,h){return x>=a&&x<a+w&&y>=b&&y<b+h}
 function mapClick(e){
   if(tab==='visit')return;
-  var r=MC.getBoundingClientRect(),x=(e.clientX-r.left)*MW/r.width,y=(e.clientY-r.top)*MH/r.height,i,q;
+  var r=MC.getBoundingClientRect(),x=(e.clientX-r.left)*MW/r.width,y=(e.clientY-r.top)*MH/r.height,i,q,L,B,Y,P,K;
   if(BLD&&BLD.mode==='place')return bldTap(x,y);
-  i=objAt(x,y);if(i>=0){BLD={mode:'sel',i:i};return bldUpdate()}
-  if(y>=MH0){if(BLD){BLD=null;bldUpdate()}return}
+  i=objAt(x,y);
+  if(EDIT&&edTap(x,y,i))return;
+  if(i>=0){BLD={mode:'sel',i:i};return bldUpdate()}
   if(BLD){BLD=null;bldUpdate()}
-  if(Math.pow((x-72)/70,2)+Math.pow((y-552)/80,2)<1)return pondOpen(-2);
+  L=bkOff('lake');if(Math.pow((x-72-L[0])/70,2)+Math.pow((y-552-L[1])/80,2)<1)return pondOpen(-2);
   for(i=0;i<9;i++){q=plotXY(i);if(inR(x,y,q[0],q[1],64,64))return tapPlot(i)}
   if(inR(x,y,CARTX-56,380,100,52)){tab='orders';return paint()}
-  if(inR(x,y,344,8,136,140)){tab='barn';return paint()}
-  if(inR(x,y,334,150,166,140)||inR(x,y,176,456,320,290)){tab='pen';return paint()}
-  if(inR(x,y,336,300,110,100)){tab='town';return paint()}
+  B=bkOff('barn');if(inR(x,y,344+B[0],8+B[1],136,140)){tab='barn';return paint()}
+  Y=bkOff('yard');P=bkOff('pasture');if(inR(x,y,334+Y[0],150+Y[1],166,140)||inR(x,y,176+P[0],456+P[1],320,290)){tab='pen';return paint()}
+  K=bkOff('stall');if(inR(x,y,336+K[0],300+K[1],110,100)){tab='town';return paint()}
 }
 function initMap(){
   MC=$('#map');if(!MC)return;MG=MC.getContext('2d');MG.imageSmoothingEnabled=false;
@@ -986,10 +1206,10 @@ function auto(g,pre,m){for(var k in m){var p=k.split(','),x=+p[0],y=+p[1],h=func
  tl(g,pre+n,x,y)}}
 function fenceH(g,x,y,w){for(var k=0;k<w;k+=16)tl(g,k%64?'fence-h':'fence-h-post',x+k,y)}
 function fenceV(g,x,y,h){for(var k=0;k<h;k+=16)tl(g,k%64?'fence-v':'fence-v-post',x-6,y+k)}
-function soilSpr(){return CSP.soil||(CSP.soil=mk(64,64,function(g){R(g,'#6e4222',0,0,64,64);for(var j=0;j<4;j++)for(var i=0;i<4;i++)tl(g,'tile-soil-wet-c',i*16,j*16)}))}
+function soilSpr0(){return CSP.soil||(CSP.soil=mk(64,64,function(g){R(g,'#6e4222',0,0,64,64);for(var j=0;j<4;j++)for(var i=0;i<4;i++)tl(g,'tile-soil-wet-c',i*16,j*16)}))}
 function lockSpr(){return CSP.lock||(CSP.lock=mk(64,64,function(g){R(g,'#7ac24a',0,0,64,64);for(var j=0;j<4;j++)for(var i=0;i<4;i++)tl(g,'tile-grass-'+((i+j)%3+1),i*16,j*16)}))}
 var PK={wheat:'wheat',carrot:'carrot',corn:'tomato'};
-function cropSpr(id,s){var k=id+s;return CSP[k]||(CSP[k]=mk(64,64,function(g){g.drawImage(soilSpr(),0,0);var p=PK[id]&&SAOK&&SAP[PK[id]+(s+1)];
+function cropSpr(id,s){var k=id+s+SKI('soil');return CSP[k]||(CSP[k]=mk(64,64,function(g){g.drawImage(soilSpr(),0,0);var p=PK[id]&&SAOK&&SAP[PK[id]+(s+1)];
  for(var j=0;j<3;j++)for(var i=0;i<3;i++){if(p)g.drawImage(SA,p[0],p[1],p[2],p[3],4+i*18,30+j*16-p[3],p[2],p[3]);else PF[id](g,12+i*20,20+j*18,s)}}))}
 function dHen(g,x,y,d,f,v){var p=SAP['chicken-white'];if(!SAOK)return;R(g,'rgba(0,0,0,.2)',x-8,y-3,16,4);g.drawImage(SA,p[0]+(f?2:1)*16,p[1]+(d>0?2:1)*16,16,16,Math.round(x)-16,Math.round(y)-32,32,32)}
 function dFarmer(g,x,y,d,f,mv,e){var p=SAP.farmer;if(!SAOK)return;var row=d>0?2:1,dx=e?e.tx-e.x:0,dy=e?e.ty-e.y:0;if(mv&&Math.abs(dy)>Math.abs(dx)*1.5)row=dy>0?0:3;
@@ -1118,7 +1338,7 @@ function applyWorld(){}
 
 /* ===== БГ-кэш карты ===== */
 var BGC={};
-function bgFor(){var k=wid()+':'+(S.ld||0),n=0,q;if(!BGC[k]){for(q in BGC)n++;if(n>3)BGC={};BGC[k]=mkBG()}return BGC[k]}
+function bgFor(){var k=wid()+':'+(S.ld||0)+':'+skSig()+':'+bkSig(),n=0,q;if(!BGC[k]){for(q in BGC)n++;if(n>3)BGC={};BGC[k]=mkBG()}return BGC[k]}
 
 /* ===== ЗЕМЛЯ И ПОСТРОЙКИ (как в Hay Day) ===== */
 var LAND_COST=[400,1500,5000,15000,40000,100000],LAND_LVL=[3,6,10,15,20,28],BASEROW=48;
@@ -1180,17 +1400,12 @@ var OBJ=[
 ];
 var OBJ_BY={};OBJ.forEach(function(o){OBJ_BY[o.id]=o});
 var BLD=null,OPREV={};
-function objCount(k,st){st=st||S;var n=0;(st.obj||[]).forEach(function(o){if(o.k===k)n++});return n}
+function objCount(k,st){st=st||S;var n=0;(st.obj||[]).forEach(function(o){if(o.k===k)n++});(st.stash||[]).forEach(function(o){if(o.k===k)n++});return n}
 function objM(k){var m=1;S.obj.forEach(function(o){var d=OBJ_BY[o.k];if(d&&d.b&&d.b[k])m+=d.b[k]});return m}
 function capN(){var c=S.cap;S.obj.forEach(function(o){var d=OBJ_BY[o.k];if(d&&d.cap)c+=d.cap});return c}
 function oPrev(o){return OPREV[o.id]||(OPREV[o.id]=mk(o.w*16+8,o.h*16+8,function(g){o.d(g,4,4,o.w,o.h,0)}).toDataURL())}
 /* занятые места основной территории (поле, дороги, амбар, двор, лавка, пруд, загон) — всё остальное можно застраивать */
-var BLK=[[0,56,296,338],[286,0,34,440],[0,398,512,38],[326,0,186,150],[326,150,180,160],[330,300,124,96],[0,462,152,198],[0,712,170,56],[168,450,24,300],[486,450,26,300],[168,450,344,32],[168,726,344,26],[448,500,68,44],[424,708,64,22]];
-function cellOk(col,row,w,h,ign){
-  if(col<0||row<0||col+w>32||row+h>BASEROW+landRows())return false;
-  if(row<BASEROW){var x0=col*16,y0=row*16,x1=x0+w*16,y1=y0+h*16;for(var k=0;k<BLK.length;k++){var b=BLK[k];if(x0<b[0]+b[2]&&x1>b[0]&&y0<b[1]+b[3]&&y1>b[1])return false}}
-  for(var i=0;i<S.obj.length;i++){var o=S.obj[i],d=OBJ_BY[o.k];if(!d||o===ign)continue;if(col<o.x+d.w&&col+w>o.x&&row<o.y+d.h&&row+h>o.y)return false}
-  return true}
+function cellOk(col,row,w,h,ign){return rectFree(col,row,w,h,ign?[ign]:[])}
 function findFree(d,ign){var r,c;for(r=BASEROW;r+d.h<=BASEROW+landRows();r++)for(c=0;c+d.w<=32;c++)if(cellOk(c,r,d.w,d.h,ign))return[c,r];for(r=0;r<BASEROW;r++)for(c=0;c+d.w<=32;c++)if(cellOk(c,r,d.w,d.h,ign))return[c,r];return null}
 function buyObj(k){var o=OBJ_BY[k];if(!o)return;
   if(lvl()<o.lvl)return toast('Нужен '+o.lvl+' уровень');
@@ -1201,15 +1416,18 @@ function buyObj(k){var o=OBJ_BY[k];if(!o)return;
 function scrollLand(){setTimeout(function(){var m=$('main'),c=$('#map');if(!m)return;if(BLD&&BLD.row!==undefined&&c){var r=c.getBoundingClientRect(),mr=m.getBoundingClientRect(),y=(BLD.row*16)/MH*r.height+(r.top-mr.top)+m.scrollTop;m.scrollTop=Math.max(0,y-mr.height/3)}else m.scrollTop=m.scrollHeight},80)}
 function bldBar(){
   var h='',d;
-  if(BLD&&BLD.mode==='place'){d=OBJ_BY[BLD.k];h='<div class="bld"><b>'+d.n+'</b>'+(BLD.buy?' · '+d.cost+' 🪙':'')+'<div class="r">Нажмите на карту, чтобы выбрать место. Зелёное — можно, красное — занято.</div><div class="br"><button class="btn" data-bok="1"'+(BLD.ok?'':' disabled')+'>✔ Поставить</button><button class="btn alt" data-bcn="1">Отмена</button></div></div>'}
-  else if(BLD&&BLD.mode==='sel'){var o=S.obj[BLD.i];d=o&&OBJ_BY[o.k];if(d)h='<div class="bld"><b>'+d.n+'</b><div class="br">'+(d.id==='pond'?'<button class="btn" data-pond="1">🐟 Пруд</button>':d.id==='mail'?'<button class="btn" data-mailopen="1">💌 Почта</button>':'')+'<button class="btn" data-bmv="1">Переместить</button><button class="btn alt" data-bsl="1">Продать +'+Math.floor(d.cost/2)+' 🪙</button><button class="btn alt" data-bcn="1">Закрыть</button></div></div>'}
+  if(EDIT&&!BLD)h=edBar();
+  else if(BLD&&BLD.mode==='place'){d=OBJ_BY[BLD.k];h='<div class="bld"><b>'+d.n+'</b>'+(BLD.buy?' · '+d.cost+' 🪙':'')+'<div class="r">Нажмите на карту, чтобы выбрать место. Зелёное — можно, красное — занято.</div><div class="br"><button class="btn" data-bok="1"'+(BLD.ok?'':' disabled')+'>✔ Поставить</button><button class="btn alt" data-bcn="1">Отмена</button></div></div>'}
+  else if(BLD&&BLD.mode==='sel'&&BLD.b)h=bkBar();
+  else if(BLD&&BLD.mode==='sel'){var o=S.obj[BLD.i];d=o&&OBJ_BY[o.k];if(d)h='<div class="bld"><b>'+d.n+'</b>'+(EDIT?'<div class="r">'+(BLD.sw?'Нажмите на предмет, с которым поменять местами.':'Нажмите на свободное место — постройка переедет туда.')+'</div>':'')+'<div class="br">'+(d.id==='pond'?'<button class="btn" data-pond="1">🐟 Пруд</button>':d.id==='mail'?'<button class="btn" data-mailopen="1">💌 Почта</button>':'')+'<button class="btn" data-bmv="1">Переместить</button>'+(EDIT?'<button class="btn'+(BLD.sw?'':' alt')+'" data-esw="1">⇄ Поменять</button>':'')+'<button class="btn alt" data-efl="1">↔ Отразить</button><button class="btn alt" data-ecp="1">📋 Копия</button><button class="btn alt" data-esk1="1">🎨 Скин</button><button class="btn alt" data-esh="1">📦 На склад</button><button class="btn alt" data-bsl="1">Продать +'+Math.floor(d.cost/2)+' 🪙</button><button class="btn alt" data-bcn="1">Закрыть</button></div></div>'}
   return'<div id="bldw">'+h+'</div>'}
 function bldUpdate(){var w=$('#bldw');if(w)w.outerHTML=E(bldBar())}
 function bldConfirm(){if(!BLD||BLD.mode!=='place'||!BLD.ok)return;var d=OBJ_BY[BLD.k];
-  if(BLD.buy){if(S.coins<d.cost)return toast('Не хватает монет');S.coins-=d.cost;S.obj.push({k:BLD.k,x:BLD.col,y:BLD.row});toast('Поставлено: '+d.n)}
-  else{BLD.mov.x=BLD.col;BLD.mov.y=BLD.row}
+  if(BLD.buy){if(S.coins<d.cost)return toast('Не хватает монет');S.coins-=d.cost;ehClear();var nq={k:BLD.k,x:BLD.col,y:BLD.row};if(BLD.s)nq.s=BLD.s;if(BLD.fl)nq.m=1;S.obj.push(nq);toast('Поставлено: '+d.n)}
+  else if(BLD.stash!==undefined){var sc=(S.stash||[])[BLD.stash];if(!sc){BLD=null;return paint()}ehPush();S.stash.splice(BLD.stash,1);sc.x=BLD.col;sc.y=BLD.row;S.obj.push(sc);toast('Поставлено со склада: '+d.n)}
+  else{ehPush();BLD.mov.x=BLD.col;BLD.mov.y=BLD.row}
   BLD=null;save();paint()}
-function bldSell(){if(!BLD||BLD.mode!=='sel')return;var o=S.obj[BLD.i],d=o&&OBJ_BY[o.k];if(!d)return;if(o.f&&o.f.length)return toast('В пруду ещё есть рыба — сначала выловите');S.coins+=Math.floor(d.cost/2);S.obj.splice(BLD.i,1);toast('Продано: '+d.n+' · +'+Math.floor(d.cost/2)+' 🪙');BLD=null;save();paint()}
+function bldSell(){if(!BLD||BLD.mode!=='sel')return;var o=S.obj[BLD.i],d=o&&OBJ_BY[o.k];if(!d)return;if(o.f&&o.f.length)return toast('В пруду ещё есть рыба — сначала выловите');ehClear();S.coins+=Math.floor(d.cost/2);S.obj.splice(BLD.i,1);toast('Продано: '+d.n+' · +'+Math.floor(d.cost/2)+' 🪙');BLD=null;save();paint()}
 function bldMove(){if(!BLD||BLD.mode!=='sel')return;var o=S.obj[BLD.i];BLD={mode:'place',k:o.k,mov:o,col:o.x,row:o.y,ok:1};paint();scrollLand()}
 function bldTap(x,y){
   var d=OBJ_BY[BLD.k],col=Math.round(x/16-d.w/2),row=Math.round(y/16-d.h/2);
@@ -1217,9 +1435,9 @@ function bldTap(x,y){
   BLD.col=col;BLD.row=row;BLD.ok=cellOk(col,row,d.w,d.h,BLD.mov)?1:0;bldUpdate()}
 function objAt(x,y){for(var i=S.obj.length-1;i>=0;i--){var o=S.obj[i],d=OBJ_BY[o.k];if(d&&x>=o.x*16&&x<(o.x+d.w)*16&&y>=o.y*16-8&&y<(o.y+d.h)*16)return i}return-1}
 function bldDraw(g,now){
-  if(tab==='visit'||!BLD||BLD.mode!=='place')return;
+  if(tab==='visit')return;edDraw(g,now);if(!BLD||BLD.mode!=='place')return;
   var d=OBJ_BY[BLD.k],x,y;g.fillStyle='rgba(255,255,255,.14)';
-  for(x=0;x<=32;x++)g.fillRect(x*16,0,1,(BASEROW+landRows())*16);for(y=0;y<=BASEROW+landRows();y++)g.fillRect(0,y*16,MW,1);g.fillStyle='rgba(110,0,0,.26)';BLK.forEach(function(b){g.fillRect(b[0],b[1],b[2],b[3])});g.fillStyle='rgba(255,255,255,.14)';
+  for(x=0;x<=32;x++)g.fillRect(x*16,0,1,(BASEROW+landRows())*16);for(y=0;y<=BASEROW+landRows();y++)g.fillRect(0,y*16,MW,1);g.fillStyle='rgba(110,0,0,.26)';bkRed(g);g.fillStyle='rgba(255,255,255,.14)';
   g.fillStyle=BLD.ok?'rgba(80,230,90,.38)':'rgba(240,60,60,.42)';g.fillRect(BLD.col*16,BLD.row*16,d.w*16,d.h*16);
   g.globalAlpha=.85;d.d(g,BLD.col*16,BLD.row*16,d.w,d.h,now);g.globalAlpha=1}
 function expandCost(){return LAND_COST[S.ld||0]}
@@ -1255,7 +1473,7 @@ function stFromSnap(sn,xp){
   var now=Date.now(),pl=[],i,q,c;
   for(i=0;i<9;i++){q=sn.pl&&sn.pl[i];c=q&&byId(q[0]);pl.push(c?{crop:q[0],t:now-(q[1]>=100?c.time*1000:q[1]/100*c.time*1000)}:null)}
   return{plots:pl,unlocked:Math.max(4,Math.min(9,sn.u||4)),pen:(sn.pn||[]).map(function(x){return x?now:0}),pet:sn.pet?1:0,dog:sn.dog?1:0,
-    obj:(sn.o||[]).filter(function(a){return OBJ_BY[a[0]]}).map(function(a){var q={k:a[0],x:a[1]|0,y:a[2]|0};if(a[3]>0){q.f=[];for(var z=0;z<Math.min(4,a[3]|0);z++)q.f.push(now-PF_TIME*600+z*30000)}return q}),lake:{f:(function(){var a=[];for(var z=0;z<Math.min(8,sn.l|0);z++)a.push(now-PF_TIME*600+z*30000);return a})()},ld:Math.max(0,Math.min(6,sn.ld|0)),wl:WORLDS[sn.w]?sn.w:'farm',xp:xp||0,coins:0,fert:0,inv:{},ch:{c:0,r:0,l:0},sp:0,cap:20,mat:{},dec:{},fname:sn.fn||''}}
+    obj:(sn.o||[]).filter(function(a){return OBJ_BY[a[0]]}).map(function(a){var q={k:a[0],x:a[1]|0,y:a[2]|0};if(a[4]&&SKD.obj[a[4]])q.s=a[4];if(a[5])q.m=1;if(a[3]>0){q.f=[];for(var z=0;z<Math.min(4,a[3]|0);z++)q.f.push(now-PF_TIME*600+z*30000)}return q}),sk:skClean(sn.sk),bl:blClean(sn.bl),lake:{f:(function(){var a=[];for(var z=0;z<Math.min(8,sn.l|0);z++)a.push(now-PF_TIME*600+z*30000);return a})()},ld:Math.max(0,Math.min(6,sn.ld|0)),wl:WORLDS[sn.w]?sn.w:'farm',xp:xp||0,coins:0,fert:0,inv:{},ch:{c:0,r:0,l:0},sp:0,cap:20,mat:{},dec:{},fname:sn.fn||''}}
 function visitFarm(id){
   if(!API)return toast('Нет связи с сервером');
   fetch(API+'/farm?id='+encodeURIComponent(id)).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(f){
@@ -1281,7 +1499,7 @@ function admGrant(s){
 function mkSnap(){
   var pl=[],i,p,s;
   for(i=0;i<9;i++){p=S.plots[i];if(!p||i>=S.unlocked){pl.push(0);continue}s=plotState(p);pl.push([p.crop,s.ready?100:Math.min(99,s.pct||0)])}
-  return{w:wid(),ld:S.ld||0,u:S.unlocked,pl:pl,o:S.obj.map(function(o){return[o.k,o.x,o.y,(o.f||[]).length]}),l:((S.lake&&S.lake.f)||[]).length,pn:S.pen.map(function(t){return t?1:0}),pet:S.pet?1:0,dog:S.dog?1:0,fn:S.fname||''}}
+  return{w:wid(),ld:S.ld||0,u:S.unlocked,pl:pl,o:S.obj.map(function(o){return[o.k,o.x,o.y,(o.f||[]).length,o.s||'',o.m?1:0]}),sk:skClean(S.sk),bl:(S.bl&&Object.keys(S.bl).length?blClean(S.bl):undefined),l:((S.lake&&S.lake.f)||[]).length,pn:S.pen.map(function(t){return t?1:0}),pet:S.pet?1:0,dog:S.dog?1:0,fn:S.fname||''}}
 function snapPost(){
   if(!API||!S)return;var tg=window.Telegram&&Telegram.WebApp;if(!tg||!tg.initData)return;
   api('/snap',{name:S.fname||myName(),lvl:lvl(),xp:S.xp,coins:S.coins,snap:mkSnap()}).catch(function(){})}
@@ -1297,6 +1515,7 @@ function price(s){var p=s.split('_');return p[0]==='chest'?CH[p[1]].p:p[0]==='bx
 function grant(s){var p=s.split('_'),n=Date.now();
   if(p[0]==='adm')return admGrant(s);
   if(p[0]==='ref'||p[0]==='refw'){var rc=+p[1]||0;S.coins+=rc;toast(p[0]==='ref'?'🤝 Друг сделал покупку: +'+rc+' 🪙':'🎁 Бонус за приглашение: +'+rc+' 🪙');save();paint();return}
+  if(p[0]==='skin'&&SKD[p[1]]&&SKD[p[1]][p[2]]){(S.skn||(S.skn={}))[p[1]+'_'+p[2]]=1;var sob=null;if(p[1]==='obj'&&SKBUY&&SKBUY.c==='obj'&&SKBUY.id===p[2])sob=S.obj[SKBUY.i];skClr();if(sob)sob.s=p[2];else if(p[1]!=='obj')(S.sk||(S.sk={}))[p[1]]=p[2];toast('🎨 Скин получен: '+SKD[p[1]][p[2]].n);save();paint();if(document.getElementById('skov'))skRender();return}
   if(p[0]==='chest')S.ch[p[1]]++;
   else if(p[0]==='bx'){var b=S.bx&&S.bx.t>n?S.bx:null;S.bx={m:Math.max(+p[1],b?b.m:0),t:Math.min(n+7*864e5,(b?b.t:n)+p[2]*864e5)}}
   else if(s==='vip')S.vip=Math.max(S.vip,n)+30*864e5;
@@ -1386,12 +1605,12 @@ function pondFx(g,o,now){var f=o.f,n=Date.now(),bx=o.x*16,by=o.y*16;if(!f||!f.le
 function lakeFish(g,x,y,big,r,edge){var w=big?10:6,h=big?5:3;
   R(g,edge,x-1,y-1,w+2,h+2);R(g,big?'#ff8a1c':'#ffc060',x,y,w,h);R(g,big?'#ffd08a':'#fff0c0',x+1,y,w-3,1);
   var tx=r?x-3:x+w;R(g,edge,tx,y-1,3,h+2);R(g,big?'#e0600a':'#ff9a2a',tx,y,2,h);R(g,'#2b1b12',r?x+w-3:x+1,y+1,1,1)}
-function lakeFx(g,now){var lk=S.lake,f=(lk&&lk.f)||[],n=Date.now(),j;
+function lakeFx(g,now){var lk=S.lake,f=(lk&&lk.f)||[],n=Date.now(),j,lo=bkOff('lake'),LX=72+lo[0],LY=552+lo[1];
   for(j=0;j<3;j++){var a=now/(1500+j*170)+j*1.7,b=now/(1900+j*130)+j*2.9,w=j%2?6:10,h=j%2?3:5;
-    lakeFish(g,Math.round(72+Math.sin(a)*(30+j*3)-w/2),Math.round(552+Math.sin(b)*(50-j*3)-h/2),j%2===0,Math.cos(a)>0,'#1f3f66')}
+    lakeFish(g,Math.round(LX+Math.sin(a)*(30+j*3)-w/2),Math.round(LY+Math.sin(b)*(50-j*3)-h/2),j%2===0,Math.cos(a)>0,'#1f3f66')}
   f.forEach(function(t,k){var big=(n-t)/(PF_TIME*1000)>=.5,w=big?10:6,h=big?5:3,a=now/(1300+k*150)+k*2.3,b=now/(1700+k*110)+k*1.9;
-    lakeFish(g,Math.round(72+Math.sin(a)*(24+k%4*6)-w/2),Math.round(552+Math.sin(b)*(34+k%3*10)-h/2),big,Math.cos(a)>0,'#3a2417')});
-  if(lk&&pondReady(lk))bubble(g,72,470,'🐟',now)}
+    lakeFish(g,Math.round(LX+Math.sin(a)*(24+k%4*6)-w/2),Math.round(LY+Math.sin(b)*(34+k%3*10)-h/2),big,Math.cos(a)>0,'#3a2417')});
+  if(lk&&pondReady(lk))bubble(g,LX,470+lo[1],'🐟',now)}
 function pondHTML(o){
   var n=Date.now(),mx=pmax(o),h='<b style="font-size:11px">'+(o===S.lake?'🌊 Озеро':'🐟 Пруд')+'</b><div class="r" style="margin:6px 0 10px">Малёк стоит '+PF_COST+' 🪙, растёт '+Math.round(PF_TIME/60)+' мин и превращается в рыбу (продаётся за '+byId('fish').sell+' 🪙). Мест: '+mx+'.</div>',j,nf=(o.f||[]).length,rd2=(o.f||[]).filter(function(t){return n>=t+PF_TIME*1000}).length;
   if(nf<mx&&S.coins>=PF_COST)h+='<button class="btn alt" data-pa="fill" style="width:100%;margin-bottom:8px">🐟 Заселить все места · '+(mx-nf)*PF_COST+' 🪙</button>';
@@ -1408,7 +1627,7 @@ function pondOpen(i){PONDI=i;var o=i===-2?lakeObj():S.obj[i];if(!o)return;if(!o.
   var ov=document.createElement('div');ov.id='pondov';ov.style.cssText='position:fixed;inset:0;background:rgba(20,10,5,.82);z-index:9997;display:flex;align-items:center;justify-content:center;padding:14px';
   ov.innerHTML='<div style="background:var(--panel);border:4px solid var(--ink);padding:14px;width:100%;max-width:420px;max-height:90vh;overflow:auto"></div>';
   document.body.appendChild(ov);pondRender();clearInterval(PONDT);PONDT=setInterval(pondRender,1000);
-  ov.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button[data-pa]');if(!b)return;var a=b.dataset.pa,o=PO();if(!o)return;
+  ov.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button[data-pa]');if(!b)return;var a=b.dataset.pa,o=PO();if(!o)return;ehClear();
     if(a==='close')return pondClose();
     if(a==='fill'){var k=pmax(o)-(o.f||[]).length,c=Math.min(k,Math.floor(S.coins/PF_COST));if(c<=0)return toast('Нужно '+PF_COST+' 🪙');S.coins-=c*PF_COST;o.f=(o.f||[]);for(var q=0;q<c;q++)o.f.push(Date.now()+q);toast('Запущено мальков: '+c);save();paintHead();pondRender()}
     else if(a==='all'){var tk=0,nn=Date.now();o.f=(o.f||[]).filter(function(t){if(nn>=t+PF_TIME*1000&&used()+tk+1<=capN()){tk++;return false}return true});if(!tk)return toast('Амбар полон — продайте товар');S.inv.fish=(S.inv.fish||0)+tk;addXp(3*tk);qp('animal',tk);toast('+'+tk+' 🐟');save();paintHead();pondRender()}
@@ -1485,6 +1704,9 @@ var LANG=(function(){if(S.lang==='ru'||S.lang==='en')return S.lang;var u=tg()&&t
 var EN={'Язык / Language':'Language',"Мини-ферма":"Mini Farm","Мини-ферма: сажай, собирай урожай и развивай свою ферму":"Mini Farm: plant, harvest and grow your farm","Профиль":"Profile","Донат":"Donate","Музыка":"Music","Ферма":"Farm","Двор":"Yard","Стройка":"Build","Заказы":"Orders","Город":"Town","Амбар":"Barn","Почта":"Mail","Награды":"Rewards","Лиса":"Fox","Майк":"Mike","Пшеница":"Wheat","Морковь":"Carrot","Помидор":"Tomato","Тыква":"Pumpkin","Клубника":"Strawberry","Яблоня":"Apple tree","Яйцо":"Egg","Молоко":"Milk","Шерсть":"Wool","Бекон":"Bacon","Мясо":"Meat","Рыба":"Fish","Уровень":"Level","Открыто":"Unlocked","Сначала откройте предыдущую грядку":"Unlock the previous plot first","Сначала пройди задания Майка":"First finish Mike's tasks","слева внизу)":"bottom left)","Нужно":"Need","Новая грядка!":"New plot!","Выберите семена для посадки":"Choose seeds to plant","Откроется на уровне":"Unlocks at level","Не хватает монет":"Not enough coins","Амбар полон — продайте товар":"Barn is full — sell some goods","Найден клад":"Treasure found","Нет удобрения. Купите в амбаре":"No fertilizer. Buy it in the barn","Рост ускорен!":"Growth boosted!","ещё":"more","чтобы убрать":"to remove","Посев отменён":"Planting cancelled","Заказ доставлен":"Order delivered","Не хватает материалов":"Not enough materials","Амбар вместимостью":"Barn capacity","Все прилавки заняты":"All stalls are taken","Покупатель":"Customer","Амбар ур.":"Barn lvl.","мест":"slots","Следующий":"Next","Улучшить":"Upgrade","Стройматериалы":"Building materials","Выпадают при сборе урожая. Купить":"Drop when harvesting. Buy","Лавка у дороги":"Roadside stall","Пустой прилавок":"Empty stall","Покупатель придёт через":"Customer arrives in","Снять":"Remove","Нажмите на товар, чтобы выставить его на прилавок. Покупатель платит":"Tap an item to put it on the stall. The customer pays","В амбаре пусто: нечего выставлять.":"The barn is empty: nothing to display.","Дороги":"Roads","Грузовик: доставка заказов":"Truck: order delivery","Рейтинг ферм":"Farm ranking","Дождь":"Rain","Снег":"Snow","Солнечно":"Sunny","Гроза":"Storm","Погода":"Weather","опыт":"XP","рост":"growth","цены":"prices","урожай":"harvest","осталось":"left","Твой множитель":"Your multiplier","вместе с акцией":"together with the event","монеты":"coins","Агата":"Agatha","Борис":"Boris","Вера":"Vera","Гриша":"Grisha","Дарья":"Daria","Ефим":"Efim","Жанна":"Jane","Зоя":"Zoe","Игнат":"Ignat","Клава":"Klava","Лёва":"Leo","Мила":"Mila","Назар":"Nazar","Олеся":"Olesya","Пётр":"Peter","Рита":"Rita","Савва":"Savva","Тоня":"Tonya","Ульяна":"Ulyana","Фёдор":"Fyodor","Хлоя":"Chloe","Цветана":"Tsvetana","Юра":"Yura","Яна":"Yana","Фермер":"Farmer","Ур.":"Lvl","опыта":"XP","Назад в город":"Back to town","Дедушка уехал, и ферма теперь на нас с тобой. Выбери семена, нажми на пустую грядку и посади 3 растения.":"Grandpa has left, and the farm is now up to you and me. Choose seeds, tap an empty plot and plant 3 crops.","Отлично! Когда над грядкой запрыгает урожай, нажми на неё и собери его. Собери урожай 3 раза.":"Great! When the crop starts bouncing over a plot, tap it and harvest. Harvest 3 times.","Загляни во Двор: куры уже снесли яйцо. Забери его!":"Visit the Yard: the hens have already laid an egg. Collect it!","Во вкладке «Заказы» ждёт грузовик. Собери товары в амбар и отправь первый заказ.":"In the «Orders» tab a truck is waiting. Put goods in the barn and send your first order.","Лишнее можно продать в «Амбаре». Продай 2 любых товара.":"Extras can be sold in the «Barn». Sell any 2 goods.","Во вкладке «Награды» ждёт подарок дня. Заходи сюда каждый день: серия даёт всё больше монет!":"In the «Rewards» tab a daily gift is waiting. Come here every day: the streak gives more and more coins!","Ферма растёт! Купи новую грядку: нажми на замок на поле.":"The farm is growing! Buy a new plot: tap the lock on the field.","Пришло письмо от дедушки: он ищет старую карту клада и просит денег на дорогу. Выполни ещё 3 заказа!":"A letter came from Grandpa: he is looking for an old treasure map and asks for money for the trip. Complete 3 more orders!","Глава 2. Дедушка нашёл первый обрывок карты! Чтобы позвать помощников, испеки 2 любые выпечки в пекарне.":"Chapter 2. Grandpa found the first piece of the map! To call helpers, bake any 2 pastries in the bakery.","Второй обрывок у странствующего торговца. Он приходит в разное время: загляни в Амбар и продай ему 3 товара.":"The second piece is with the traveling merchant. He comes at different times: visit the Barn and sell him 3 goods.","Лиса следит за нашими яйцами! Когда она выскочит на поле, быстро нажми на неё.":"The fox is watching our eggs! When it jumps out onto the field, tap it quickly.","Карта почти собрана! Сдай заказ на недельной ярмарке: он во вкладке «Заказы».":"The map is almost complete! Hand in an order at the weekly fair: it is in the «Orders» tab.","Последний обрывок спрятан под яблоней. Вырасти яблоню (она растёт 4 часа) и собери яблоки.":"The last piece is hidden under the apple tree. Grow an apple tree (it takes 4 hours) and pick the apples.","Глава 2 пройдена! Карта собрана, дедушка уже в пути. Новые главы скоро.":"Chapter 2 complete! The map is assembled, Grandpa is on his way. New chapters soon.","Красная точка на вкладке значит, что там есть что забрать.":"A red dot on a tab means there is something to collect.","Яйца и молоко хорошо подходят для заказов.":"Eggs and milk are great for orders.","Задания дня обновляются каждый день.":"Daily tasks refresh every day.","Когда амбар полон, расширь его: так урожай не пропадёт.":"When the barn is full, expand it: that way no harvest is lost.","Привет, фермер! Я Майк, держу старую мельницу неподалёку от города. Как называется эта чудесная ферма?":"Hi, farmer! I'm Mike, I keep the old mill near the town. What is this wonderful farm called?","Название фермы":"Farm name","Готово":"Done","Забрать":"Collect","Прогресс":"Progress","Закрыть":"Close","Хлеб":"Bread","Сыр":"Cheese","Пирог":"Pie","Соберите урожай":"Harvest crops","Курьер":"Courier","Выполните заказы":"Complete orders","Торговец":"Merchant","Продайте товары":"Sell goods","Птичница":"Poultry keeper","Соберите продукты со двора":"Collect yard products","Пекарь":"Baker","Испеките выпечку":"Bake pastries","Постоянство":"Consistency","Заберите награду дня":"Claim the daily reward","Король ярмарки":"Fair king","Сдайте ярмарочные заказы":"Hand in fair orders","Осенняя ярмарка":"Autumn Fair","Ярмарка урожая":"Harvest Fair","Сырная ярмарка":"Cheese Fair","Праздник пирогов":"Pie Festival","Ещё":"More","дн.":"d.","Сдать":"Hand in","Ярмарка":"Fair","Пекарня":"Bakery","с":"at","ур.":"lvl.","Печь":"Bake","Не хватает продуктов":"Not enough ingredients","Достижения":"Achievements","Все уровни пройдены":"All levels completed","Достижение":"Achievement","Коллекция":"Collection","Коллекция собрана":"Collection complete","Заходи на мою пиксельную ферму!":"Come and see my pixel farm!","Приглашение отправлено":"Invitation sent","ч":"h","мин":"min","Дождь: урожай +1 · ещё":"Rain: harvest +1 · for another","Странствующий торговец скупает всё":"The traveling merchant buys everything","Осталось":"Left","Кот":"Cat","Сам собирает яйца и молоко":"Collects eggs and milk by itself","Пёс":"Dog","монет при продаже":"coins when selling","Цветы":"Flowers","Пугало":"Scarecrow","Пруд":"Pond","Магазин":"Shop","Удобрение":"Fertilizer","Ускоряет рост вдвое. Выберите":"Doubles growth speed. Select","на ферме и нажмите на грядку. Для животных и пекарни есть кнопка":"on the farm and tap a plot. Animals and the bakery have a button","Есть":"Owned","Красота: +4% к продаже":"Beauty: +4% to sales","Куплено!":"Purchased!","Лиса украла яйцо!":"The fox stole an egg!","Лиса прогнана":"Fox chased away","Колесо удачи":"Wheel of fortune","Одно вращение в день":"One spin per day","Завтра":"Tomorrow","Крутить":"Spin","Колесо":"Wheel","Монеты":"Coins","Урожай":"Harvest","Выпечка":"Pastries","Серия":"Streak","Ярмарки":"Fairs","Место":"Rank","Удобр.":"Fert.","Имя":"Name","дн. на ферме":"days on the farm","Позвать друга":"Invite a friend","Об игре":"About","Курица":"Hen","Корова":"Cow","Овца":"Sheep","Свинья":"Pig","Кролик":"Rabbit","Индюк":"Turkey","Утка":"Duck","Посадите культуры":"Plant crops","м":"m","Награда дня":"Daily reward","Задание":"Task","на дворе!":"in the yard!","Время сокращено вдвое!":"Time cut in half!","Ускорено!":"Sped up!","Двор с животными":"Animal yard","Купить за":"Buy for","даёт":"gives","Купить":"Buy","Даёт":"Gives","Собрать":"Collect","Получено. Приходите завтра!":"Received. Come back tomorrow!","Забрать награду дня":"Claim daily reward","Задания дня":"Daily tasks","отм.":"cancel","Карта фермы":"Farm map","Стройка · земля и постройки":"Build · land and buildings","Выберите семена на панели сверху, нажмите на пустую грядку, а когда вырастет — на урожай. Здания на карте открывают разделы. Ошиблись с посевом? Выберите":"Choose seeds on the top panel, tap an empty plot, and when the crop is grown, tap it. Buildings on the map open sections. Made a planting mistake? Select","и нажмите на растущую грядку.":"and tap a growing plot.","Отправить":"Send","за штуку":"each","Все":"All","Амбар пуст. Соберите урожай на ферме.":"The barn is empty. Harvest crops on the farm.","Улучшить амбар в Городе":"Upgrade the barn in Town","Участок":"Plot","Выпас":"Pasture","Авторы графики":"Graphics credits","Деревья":"Trees","Растения и цветы":"Plants and flowers","и другие авторы.":"and other authors.","Источник":"Source","Остальная графика нарисована кодом.":"The rest of the graphics are drawn with code.","К ферме":"To the farm","Моя ферма":"My farm","Автор игры":"Game author","Игру полностью сделал(а)":"The game was fully made by","Спрайты":"Sprites","без бонуса":"no bonus","Мир болота":"Swamp World","опыт +25%":"XP +25%","Мир будущего":"Future World","монеты +25%":"coins +25%","Мир динозавров":"Dino World","рост +25%":"growth +25%","Водный мир":"Water World","рыба растёт на 50% быстрее, монеты +10%":"fish grow 50% faster, coins +10%","Мир":"World","шт.":"pcs","Фермы":"Farms","игроков":"of players","бонусы":"bonuses","Миры":"Worlds","Миры открываются по уровню бесплатно. В каждом свой пейзаж, бонус и особые постройки.":"Worlds unlock by level for free. Each has its own scenery, bonus and special buildings.","Бонус":"Bonus","Открывается с":"Unlocks from","уровня":"level","Здесь":"Here","Перейти":"Go","Тюк сена":"Hay bale","Забор":"Fence","Куст":"Bush","Клумба":"Flower bed","Дерево":"Tree","Скамейка":"Bench","Фонарь":"Lamp","опыт +3%":"XP +3%","Колодец":"Well","рост +4%":"growth +4%","Прудик":"Little pond","разводи рыбу":"breed fish","Силос":"Silo","амбар +10 мест":"barn +10 slots","Статуя":"Statue","Мельница":"Windmill","монеты +5%":"coins +5%","Камыш":"Reeds","Грибы":"Mushrooms","Коряга":"Snag","Болотце":"Little bog","Неон-фонарь":"Neon lamp","Солнечная панель":"Solar panel","монеты +3%":"coins +3%","Робот-помощник":"Helper robot","рост +5%":"growth +5%","Купол":"Dome","Папоротник":"Fern","Яйцо динозавра":"Dinosaur egg","опыт +4%":"XP +4%","Скелет":"Skeleton","Вулкан":"Volcano","рост +6%":"growth +6%","Ракушка":"Seashell","Водоросли":"Seaweed","Коралл":"Coral","Аквариум":"Aquarium","монеты +4%":"coins +4%","Маяк":"Lighthouse","Пиратский корабль":"Pirate ship","опыт +5%":"XP +5%","Нужен":"Requires","уровень":"level","Больше нельзя: максимум":"No more allowed: maximum","Нет места — расширьте землю":"No room — expand your land","Нажмите на карту, чтобы выбрать место. Зелёное — можно, красное — занято.":"Tap the map to choose a spot. Green — free, red — taken.","Поставить":"Place","Отмена":"Cancel","Переместить":"Move","Продать":"Sell","Поставлено":"Placed","В пруду ещё есть рыба — сначала выловите":"There is still fish in the pond — catch it first","Продано":"Sold","Вся земля куплена":"All land purchased","Земля расширена: +8 рядов":"Land expanded: +8 rows","клеток":"cells","построек":"buildings","Расширение +8 рядов":"Expansion +8 rows","Расширить":"Expand","Ставить можно на купленной земле внизу и на свободных местах по всей ферме. При выборе места красным подсвечено то, что занято.":"You can build on the purchased land below and on free spots all over the farm. When choosing a spot, red marks what is taken.","Болото":"Swamp","Будущее":"Future","Динозавры":"Dinosaurs","есть":"owned","Максимум":"Maximum","Фермы игроков":"Player farms","Сейчас в игре":"Online now","Загружаю":"Loading","Пока нет данных. Фермы игроков появляются здесь, когда они играют в":"No data yet. Player farms appear here once they play in Telegram.","Посетить":"Visit","Обновить список":"Refresh list","Нет связи с сервером":"No connection to the server","Не удалось открыть ферму":"Could not open the farm","Ферма игрока":"Player's farm","Это чужая ферма, здесь можно только смотреть.":"This is someone else's farm, you can only look here.","Подарить подарок":"Send a gift","Назад к списку":"Back to list","Вам выдано":"Granted to you","Списано":"Deducted","Обычный":"Common","Редкий":"Rare","Легендарный":"Legendary","Друг сделал покупку":"Friend made a purchase","Бонус за приглашение":"Invitation bonus","Покупка получена!":"Purchase received!","Оплата недоступна":"Payment unavailable","Не удалось создать счёт":"Could not create the invoice","сундук":"chest","Выпало":"Got","Нужен премиум-пропуск":"Premium pass required","Ещё рано":"Too early","Награда":"Reward","Сундуки, множители":"Chests, multipliers","и боевой пропуск":"and battle pass","Активно":"Active","Множитель":"Multiplier","Множителя нет":"No multiplier","нет":"none","Итого сейчас":"Total now","монеты (донат + акция":"coins (donation + event","складываются)":"stack)","Сундуки":"Chests","В наличии":"In stock","Открыть":"Open","Множитель опыта и монет":"XP and coins multiplier","на":"for","Суммарно не больше 7 дней":"Total no more than 7 days","на 30 дней":"for 30 days","Монеты и опыт +25%":"Coins and XP +25%","Боевой пропуск · ур.":"Battle pass · lvl.","Премиум-пропуск":"Premium pass","Активен":"Active","Награды за каждый уровень":"Rewards for every level","Тестовый режим: покупки бесплатные.":"Test mode: purchases are free.","Малёк стоит":"Fry costs","растёт":"grows","мин и превращается в рыбу (продаётся за":"min and turns into a fish (sells for","Мест":"Slots","Свободное место":"Free slot","Малёк":"Fry","Рыба выросла!":"Fish grown!","Подрастает":"Growing","Выловить":"Catch","Малёк запущен в пруд":"Fry released into the pond","Получено":"Received","Нет удобрения":"No fertilizer","Не хватает товара":"Not enough goods","Подарок отправлен!":"Gift sent!","Осталось сегодня":"Left today","Не удалось отправить":"Could not send","Почта работает внутри":"Mail works inside","здесь приходят подарки от друзей, а ты можешь отправлять их другим игрокам.":"here you receive gifts from friends, and you can send them to other players.","Входящие":"Inbox","Писем нет. Подарки от друзей появятся здесь.":"No letters. Gifts from friends will appear here.","От":"From","друга":"a friend","Забрать всё":"Collect all","Отправить подарок":"Send a gift","Для":"For","игрока":"the player","До 5 подарков в сутки":"Up to 5 gifts per day","Записка (необязательно)":"Note (optional)","В амбаре пусто: товары для подарка появятся, когда что-нибудь вырастишь.":"The barn is empty: gift goods will appear once you grow something.","Загружаю список игроков":"Loading player list","Пока нет других игроков в списке.":"No other players in the list yet.","Выбери друга из списка ферм":"Choose a friend from the farm list","Приведи друга":"Bring a friend","Друг заходит по твоей ссылке и получает":"A friend joins via your link and gets","А ты получаешь":"And you get","бонусом в":"as a bonus in","с каждой его покупки за":"from each of their purchases made with","Приглашено":"Invited","Заработано":"Earned","Язык":"Language","Озвучка: вкл":"Voice: on","Озвучка: выкл":"Voice: off","Озвучка английская, работает на устройствах с синтезатором речи.":"English voice-over; works on devices with speech synthesis."};
 var PAT=[[/Нужен (\d+) уровень/g,'Requires level $1'],[/Открывается с (\d+) уровня/g,'Unlocks at level $1']];
 var EN_RE=null,TC={};
+Object.assign(EN,{'Редактор фермы':'Farm editor','Редактор':'Editor','Готово':'Done','Скины':'Skins','Скин постройки':'Building skin','Скины фермы':'Farm skins','Отменить':'Undo','Склад':'Storage','Автоукладка':'Auto-arrange','Отразить':'Flip','Копия':'Copy','Скин':'Skin','На склад':'To storage','Поставить':'Place','Закрыть':'Close','Нажмите на постройку, потом на свободное место — она переедет туда. Лишнее можно убрать на склад бесплатно.':'Tap a building, then an empty spot to move it there. Extra items can be stored for free.','Нажмите на свободное место — постройка переедет туда.':'Tap an empty spot to move the building there.','Тут занято':'Occupied','Нечего отменять':'Nothing to undo','Отменено':'Undone','Убрано на склад':'Moved to storage','Постройки аккуратно расставлены':'Buildings arranged neatly','Не хватило места — расширьте землю':'Not enough room — expand your land','Построек пока нет':'No buildings yet','Склад пуст.':'Storage is empty.','Здесь хранятся постройки, которые вы убрали с фермы. Ставить их обратно бесплатно.':'Buildings you removed from the farm are kept here. Placing them again is free.','Поставлено со склада':'Placed from storage','Грядки':'Beds','Забор':'Fence','Дорожки':'Paths','Амбар':'Barn','Лавка':'Stall','Курятник':'Coop','Озеро':'Lake','Газон':'Lawn','Постройка':'Building','Классика':'Classic','Чернозём':'Black soil','Песок':'Sand','Мох':'Moss','Лунная':'Moonlit','Золотая':'Golden','Дерево':'Wood','Белый':'White','Тёмный':'Dark','Камень':'Stone','Неон':'Neon','Золото':'Gold','Земля':'Dirt','Булыжник':'Cobblestone','Кирпич':'Brick','Синий':'Blue','Зелёный':'Green','Фиолетовый':'Purple','Золотой':'Golden','Бирюза':'Turquoise','Сумрак':'Dusk','Изумруд':'Emerald','Розовая лагуна':'Pink lagoon','Лава':'Lava','Осень':'Autumn','Весна':'Spring','Сакура':'Sakura','Зима':'Winter','Ночь':'Night','Обычный':'Default','надето':'equipped','осмотр':'preview','куплено':'owned','бесплатно':'free','Купить':'Buy','Скин получен':'Skin unlocked','Это предпросмотр: на ферме скин виден, но пока не ваш.':'Preview only: you can see the skin on your farm, but you do not own it yet.'});
+Object.assign(EN,{'Поле':'Field','Двор':'Yard','Загон':'Paddock','Деревце':'Tree','Куст':'Bush','Стог сена':'Hay bale','Ящик':'Crate','Бочка':'Barrel','Валун':'Boulder','⇄ Поменять':'⇄ Swap','↺ На место':'↺ Reset','🗑 Убрать':'🗑 Remove','↺ Всё на место':'↺ Reset all','Нажмите на предмет, с которым поменять местами.':'Tap the item to swap with.','Нажмите на предмет, с которым поменять':'Tap the item to swap with','Нажмите на свободное место — переедет туда. Или «Поменять» и выберите, с чем.':'Tap an empty spot to move it there. Or press “Swap” and choose with what.','Не помещается — освободите место':'Does not fit — free up some space','⇄ Поменяли местами':'⇄ Swapped','🗑 Убрано. «Всё на место» вернёт':'🗑 Removed. “Reset all” brings it back','Родное место занято':'Original spot is taken','↺ Вернули на место':'↺ Put back','Всё уже на местах':'Everything is already in place','↺ Всё на своих местах':'↺ Everything is back in place','Нажмите на любой предмет — поле, амбар, озеро, деревья — потом на свободное место: он переедет туда. «Поменять» меняет два предмета местами.':'Tap any item — field, barn, lake, trees — then an empty spot to move it there. “Swap” exchanges two items.'});
+
 function T(s){if(LANG!=='en'||typeof s!=='string'||!/[А-Яа-яЁё]/.test(s))return s;var c=TC[s];if(c!==undefined)return c;var r=s;PAT.forEach(function(p){r=r.replace(p[0],p[1])});
   if(!EN_RE){var ks=Object.keys(EN).sort(function(a,b){return b.length-a.length}).map(function(k){return k.replace(/[.*+?^${}()|[\]\\\/]/g,'\\$&')});EN_RE=new RegExp('(^|[^А-Яа-яЁё])(?:'+ks.join('|')+')(?![А-Яа-яЁё])','g')}
   r=r.replace(EN_RE,function(m,p){return p+EN[m.slice(p.length)]});var n=0;for(var q in TC)if(++n>2500){TC={};break}TC[s]=r;return r}
