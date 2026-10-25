@@ -419,9 +419,24 @@ class _Lock:
         LOCK.release()
 _TOKEN = ""
 
+# платные скины: skin_<категория>_<id> -> цена в ⭐ (должно совпадать с каталогом SKD в index.html)
+_BLD = {"purple": 25, "gold": 45, "neon": 75}
+SKINS = {
+    "soil": {"moss": 25, "moon": 45, "gold": 75},
+    "fence": {"stone": 25, "neon": 45, "gold": 75},
+    "path": {"brick": 25, "moon": 45, "gold": 75},
+    "barn": _BLD, "stall": _BLD, "coop": _BLD, "obj": _BLD,
+    "lake": {"emerald": 25, "lagoon": 45, "lava": 75},
+    "grass": {"sakura": 25, "winter": 45, "night": 75},
+}
+
 def price(sku):
     p = sku.split("_")
     try:
+        if p[0] == "skin" and len(p) == 3 and p[1] in SKINS and p[2] in SKINS[p[1]]:
+            return SKINS[p[1]][p[2]]
+        if p[0] == "egg" and len(p) == 3 and p[1] in ("farm", "swamp", "halloween", "future", "dino", "aqua") and p[2] in ("s", "e"):
+            return {"s": 25, "e": 75}[p[2]]
         if p[0] == "chest" and p[1] in ("c", "r", "l"):
             return {"c": 15, "r": 45, "l": 120}[p[1]]
         if p[0] == "bx" and 2 <= int(p[1]) <= 10 and int(p[2]) in (1, 3, 7):
@@ -579,6 +594,10 @@ class H(BaseHTTPRequestHandler):
             if self.path == "/invoice": return self._send(200, payments.api_invoice(bot, body))
             if self.path == "/claim":
                 if body.get("op") in ("box", "send", "ack"): return self._send(200, admin.mail_api(body, bot))
+                if body.get("op") == "help": return self._send(200, admin.help_api(body, bot))
+                if body.get("op") == "topweek":
+                    u = payments.user_id(body.get("initData", ""))
+                    return self._send(200, admin.top_week(u) if u else {"ok": False})
                 if body.get("op") in ("ref", "refset", "ping"): return self._send(200, admin.ref_api(body, bot))
                 return self._send(200, payments.api_claim(body))
             if self.path == "/snap":
@@ -591,6 +610,14 @@ class H(BaseHTTPRequestHandler):
         self._send(404, {"error": "not found"})
     def log_message(self, *a): pass
 
+import threading, time
+def _weekly():
+    time.sleep(30)
+    while True:
+        try: admin.week_tick(bot)
+        except Exception as e: print("week_tick:", e, flush=True)
+        time.sleep(600)
+threading.Thread(target=_weekly, daemon=True).start()
 ThreadingHTTPServer(("127.0.0.1", 3001), H).serve_forever()
 UPDEOF
 cat > "$APP_DIR/admin.py.new" <<'UPDEOF'
@@ -672,16 +699,86 @@ def record_snapshot(uid, name, lvl, xp, coins, snap):
         return False
     with P._Lock():
         d = _pload()
-        d[str(uid)] = {
+        old = d.get(str(uid)) or {}
+        nxp = max(0, min(10 ** 9, int(xp or 0)))
+        wk = week_id(now)
+        rec = {
             "name": _clean(name) or "Фермер",
             "lvl": max(1, min(999, int(lvl or 1))),
-            "xp": max(0, min(10 ** 9, int(xp or 0))),
+            "xp": nxp,
             "coins": max(0, min(10 ** 12, int(coins or 0))),
             "seen": int(now),
             "snap": snap,
         }
+        if old.get("wk") == wk:
+            rec["wk"], rec["wb"] = wk, min(old.get("wb", nxp), nxp)
+            if "pwk" in old:
+                rec["pwk"], rec["pg"] = old["pwk"], old.get("pg", 0)
+        else:
+            if "wk" in old:                      # неделя сменилась: запоминаем итог прошлой
+                rec["pwk"], rec["pg"] = old["wk"], max(0, old.get("xp", 0) - old.get("wb", old.get("xp", 0)))
+            rec["wk"], rec["wb"] = wk, min(old.get("xp", nxp), nxp)
+        d[str(uid)] = rec
         _psave(d)
     return True
+
+
+WEEK_PRIZES = [(10000, "egg_farm_e", "👑 королевское яйцо"), (5000, "egg_farm_s", "💎 яйцо"), (2500, None, "")]
+
+
+def week_id(t=None):
+    """Номер недели; неделя начинается в понедельник 00:00 UTC (03:00 по Москве)."""
+    return int(((t or time.time()) - 4 * 86400) // 604800)
+
+
+def _week_gain(v, w):
+    if v.get("wk") == w:
+        return max(0, v.get("xp", 0) - v.get("wb", v.get("xp", 0)))
+    if v.get("pwk") == w:
+        return max(0, v.get("pg", 0))
+    return 0
+
+
+def top_week(uid):
+    """Недельный рейтинг: прирост опыта с понедельника."""
+    w = week_id(); d = _pload()
+    rows = [(u, _week_gain(v, w), v) for u, v in d.items()]
+    rows = [r for r in rows if r[1] > 0]
+    rows.sort(key=lambda r: r[1], reverse=True)
+    out = [{"id": hid(u), "name": v.get("name", "Фермер"), "lvl": v.get("lvl", 1), "gain": g,
+            "me": 1 if u == str(uid) else 0} for u, g, v in rows[:20]]
+    me = next((i + 1 for i, r in enumerate(rows) if r[0] == str(uid)), 0)
+    mg = next((r[1] for r in rows if r[0] == str(uid)), 0)
+    left = int((w + 1) * 604800 + 4 * 86400 - time.time())
+    return {"ok": True, "rows": out, "me": me, "mg": mg, "left": left, "prizes": [p[0] for p in WEEK_PRIZES]}
+
+
+def week_tick(bot=None):
+    """Раз в неделю выдаёт призы топ-3 прошлой недели (вызывается из фонового потока)."""
+    w = week_id(); wins = []
+    with P._Lock():
+        dd = P._load(); last = dd.get("wkaward")
+        if last is None or last >= w:
+            if last is None:
+                dd["wkaward"] = w; P._save(dd)
+            return
+        pl = _pload()
+        rows = sorted([(u, _week_gain(v, last)) for u, v in pl.items()], key=lambda r: r[1], reverse=True)
+        rows = [r for r in rows if r[1] > 0][:3]
+        for i, (u, g) in enumerate(rows):
+            c, egg, et = WEEK_PRIZES[i]
+            gl = dd["grants"].setdefault(u, [])
+            gl.append({"id": uuid.uuid4().hex[:12], "sku": "adm_coins_%d" % c})
+            if egg:
+                gl.append({"id": uuid.uuid4().hex[:12], "sku": egg})
+            wins.append((u, i + 1, c, et))
+        dd["wkaward"] = w; P._save(dd)
+    if bot:
+        for u, place, c, et in wins:
+            try:
+                bot.send_message(int(u), "🏆 Итоги недели: вы заняли %d место в рейтинге ферм!\nНаграда: %d 🪙%s. Откройте игру — награда уже ждёт." % (place, c, (" + " + et) if et else ""))
+            except Exception:
+                pass
 
 
 def farms_list(limit=50):
@@ -841,6 +938,42 @@ def mail_api(body, bot=None):
     return {"ok": True, "left": MAIL_DAY_LIMIT - q["n"]}
 
 
+HELP_DAY_LIMIT = 10      # ферм в сутки, которым можно помочь
+HELP_OWNER = 30           # монет владельцу за помощь
+
+
+def help_api(body, bot=None):
+    """POST /claim, op=help: помочь чужой ферме. Владелец получает подарок в почту, помогающий — награду в клиенте."""
+    uid = P.user_id(body.get("initData", ""))
+    if not uid: return {"ok": False, "err": "auth"}
+    to = str(body.get("to", "")); rid = None
+    for u in _pload():
+        if hid(u) == to: rid = u; break
+    if not rid: return {"ok": False, "err": "Игрок не найден"}
+    if rid == uid: return {"ok": False, "err": "Это ваша ферма"}
+    with P._Lock():
+        d = P._load(); box = d.setdefault("mail", {})
+        today = time.strftime("%Y-%m-%d")
+        hq = d.setdefault("helpq", {}).get(uid) or {}
+        if hq.get("d") != today: hq = {"d": today, "to": []}
+        if rid in hq["to"]: return {"ok": False, "err": "Сегодня вы уже помогали этой ферме"}
+        if len(hq["to"]) >= HELP_DAY_LIMIT: return {"ok": False, "err": "Лимит помощи: %d ферм в сутки" % HELP_DAY_LIMIT}
+        rbox = box.get(rid, [])
+        if len(rbox) >= MAIL_BOX_MAX: return {"ok": False, "err": "У владельца переполнен ящик"}
+        fn = _mclean(body.get("fn"), 16) or _mclean((_pload().get(uid) or {}).get("name"), 16) or "Сосед"
+        rbox.append({"id": uuid.uuid4().hex[:12], "fn": fn, "kind": "coins", "k": "", "n": HELP_OWNER,
+                     "msg": "помог(ла) на ферме", "t": int(time.time())})
+        box[rid] = rbox; hq["to"].append(rid); d["helpq"][uid] = hq
+        P._save(d)
+        left = HELP_DAY_LIMIT - len(hq["to"])
+    if bot:
+        def _n():
+            try: bot.send_message(int(rid), "🤝 %s помог(ла) вашей ферме! +%d 🪙 ждут в «Почте»." % (fn, HELP_OWNER))
+            except Exception: pass
+        threading.Thread(target=_n, daemon=True).start()
+    return {"ok": True, "left": left}
+
+
 # ---------- выдачи ----------
 def grant_str(code):
     """Переводит короткий код в строку выдачи или None, если код неверный."""
@@ -893,6 +1026,8 @@ def describe(grant):
     names = {"chest_c": "📦 обычный сундук", "chest_r": "💎 редкий сундук", "chest_l": "👑 легендарный сундук",
              "vip": "👑 VIP на 30 дней", "bp": "🎫 премиум-пропуск"}
     if grant in names: return names[grant]
+    if grant.startswith("egg_"): return "🥚 кейс с яйцом %s" % grant[4:].replace("_", " / ")
+    if grant.startswith("skin_"): return "🎨 скин %s" % grant[5:].replace("_", " / ")
     if grant.startswith("bx_"):
         _, m, dd = grant.split("_"); return "⚡ множитель ×%s на %s дн." % (m, dd)
     return grant
