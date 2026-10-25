@@ -1145,7 +1145,7 @@ function petsHTML(){
   var P=pp(),n=Date.now(),h='<h2>🐾 Питомцы</h2>',w,i;
   h+='<div class="r" style="margin:0 0 10px">Яйцо вырастает в питомца. Кормите его — и пока он сыт, он даёт бонус. Если питомец голоден, бонус отключается, но он не пропадает.</div>';
   /* кейсы */
-  h+='<h3 class="sh">🥚 Кейсы с яйцами</h3><div class="skt">'+WORDER.filter(function(k){return lvl()>=WORLDS[k].l}).map(function(k){return'<button class="btn'+(k===PWSEL?'':' alt')+'" data-ptw="'+k+'">'+WORLDS[k].e+' '+esc(WORLDS[k].n.replace('Мир ','').replace(/^./,function(c){return c.toUpperCase()}))+'</button>'}).join('')+'</div>';
+  h+='<h3 class="sh">🥚 Кейсы с яйцами</h3><div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">'+WORDER.filter(function(k){return lvl()>=WORLDS[k].l}).map(function(k){return'<button class="btn'+(k===PWSEL?'':' alt')+'" data-ptw="'+k+'" style="width:100%;text-align:left;padding:12px 14px">'+WORLDS[k].e+' '+esc(WORLDS[k].n.replace('Мир ','').replace(/^./,function(c){return c.toUpperCase()}))+'</button>'}).join('')+'</div>';
   if(!WORLDS[PWSEL]||lvl()<WORLDS[PWSEL].l)PWSEL='farm';
   var full=P.eggs.length>=PE_MAX;
   ['c','s','e'].forEach(function(t){var c=CASE[t],od=c.odds.map(function(x,i){return x?RS[i]+' '+x+'%':''}).filter(Boolean).join(' · ');
