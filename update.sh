@@ -623,7 +623,7 @@ class H(BaseHTTPRequestHandler):
             if self.path == "/snap":
                 uid = payments.user_id(body.get("initData", ""))
                 if not uid: return self._send(200, {"ok": False})
-                ok = admin.record_snapshot(uid, body.get("name"), body.get("lvl"), body.get("xp"), body.get("coins"), body.get("snap"), 1 if body.get("tm") else 0)
+                ok = admin.record_snapshot(uid, body.get("name"), body.get("lvl"), body.get("xp"), body.get("coins"), body.get("snap"), 1 if body.get("tm") else 0, {"ch": body.get("ch"), "fe": body.get("fe")})
                 return self._send(200, {"ok": bool(ok)})
         except Exception as e:
             return self._send(500, {"error": str(e)[:100]})
@@ -716,11 +716,14 @@ LVX = 32                     # как в игре: уровень = floor(sqrt(x
 _BOT = None                  # сюда payments_http кладёт объект бота — для уведомлений админу
 
 
-def _suspicious(old, xp, lvl, coins, now, tm):
+def _suspicious(old, xp, lvl, coins, now, tm, ex=None):
     """Возвращает причину подозрения или None."""
     if old.get("trust") or old.get("tu", 0) > now:
         return None
     if tm: return "изменено сохранение на телефоне (подпись не совпала)"
+    ex = ex or {}
+    if int(ex.get("ch") or 0) > 100: return "сундуков на руках: %s (нереально много)" % ex.get("ch")
+    if int(ex.get("fe") or 0) > 20000: return "удобрения на руках: %s (нереально много)" % ex.get("fe")
     if xp >= XP_ABS_MAX: return "опыт %d выше возможного" % xp
     if coins >= COINS_ABS_MAX: return "монет %d выше возможного" % coins
     lv2 = int((xp / LVX) ** 0.5) + 1
@@ -762,7 +765,7 @@ def _alert(uid, rec, why, claimed):
     threading.Thread(target=_s, daemon=True).start()
 
 
-def record_snapshot(uid, name, lvl, xp, coins, snap, tm=0):
+def record_snapshot(uid, name, lvl, xp, coins, snap, tm=0, ex=None):
     """Сохраняет снимок фермы игрока (вызывается из HTTP-сервиса)."""
     now = time.time()
     with _lk:
@@ -777,7 +780,7 @@ def record_snapshot(uid, name, lvl, xp, coins, snap, tm=0):
         old = d.get(str(uid)) or {}
         nxp = max(0, min(10 ** 9, int(xp or 0)))
         ncoins = max(0, min(10 ** 12, int(coins or 0)))
-        why = _suspicious(old, nxp, lvl, ncoins, now, 1 if tm else 0)
+        why = _suspicious(old, nxp, lvl, ncoins, now, 1 if tm else 0, ex)
         if why:
             # цифры не принимаем: оставляем старые данные, помечаем игрока
             bad = dict(old) if old else {"name": _clean(name) or "Фермер", "lvl": 1, "xp": 0, "coins": 0, "snap": {"w": "farm"}}
