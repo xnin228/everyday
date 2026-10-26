@@ -548,6 +548,10 @@ def install(bot, token):
                 except Exception:
                     rb = 0
             _save(d)
+        try:
+            import admin as _an
+            _an.notify("pay", "💰 Покупка: %s — <code>%s</code>, %s ⭐" % (_an._nm(uid), sku, sp.total_amount))
+        except Exception: pass
         if rb and inv:
             try: bot.send_message(int(inv), "🤝 Ваш друг сделал покупку: вам +%d 🪙 (партнёрская программа). Заберите в игре!" % rb)
             except Exception: pass
@@ -603,7 +607,9 @@ class H(BaseHTTPRequestHandler):
             return self._send(500, {"error": str(e)[:100]})
         self._send(404, {"error": "not found"})
     def do_POST(self):
-        if not _rate_ok(self._ip()): return self._send(429, {"error": "too many requests"})
+        if not _rate_ok(self._ip()):
+            admin.notify("sec", "⚠️ Много запросов с IP <code>%s</code> (лимит сработал)" % self._ip(), key="rl" + self._ip(), every=900)
+            return self._send(429, {"error": "too many requests"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
             if n > 60000: return self._send(413, {"error": "too large"})
@@ -615,7 +621,9 @@ class H(BaseHTTPRequestHandler):
                 _b = admin.ban_get(_u0)
                 if body.get("op") == "ban":
                     return self._send(200, {"ok": True, "ban": _b})
-                if _b: return self._send(200, {"ok": False, "err": "ban", "ban": _b})
+                if _b:
+                    admin.notify("sec", "🚫 Забаненный пытается играть: %s" % admin._nm(_u0), key="bt" + str(_u0), every=3600)
+                    return self._send(200, {"ok": False, "err": "ban", "ban": _b})
             elif body.get("op") == "ban":
                 return self._send(200, {"ok": False})
             if self.path == "/invoice": return self._send(200, payments.api_invoice(bot, body))
@@ -634,6 +642,7 @@ class H(BaseHTTPRequestHandler):
                 ok = admin.record_snapshot(uid, body.get("name"), body.get("lvl"), body.get("xp"), body.get("coins"), body.get("snap"), 1 if body.get("tm") else 0, {"ch": body.get("ch"), "fe": body.get("fe")})
                 return self._send(200, {"ok": bool(ok)})
         except Exception as e:
+            admin.notify("err", "❗ Ошибка сервера <code>%s</code>: %s" % (self.path, str(e)[:150]), key=self.path + str(e)[:40], every=600)
             return self._send(500, {"error": str(e)[:100]})
         self._send(404, {"error": "not found"})
     def log_message(self, *a): pass
@@ -646,6 +655,7 @@ def _weekly():
         except Exception as e: print("week_tick:", e, flush=True)
         time.sleep(600)
 threading.Thread(target=_weekly, daemon=True).start()
+admin.notify("boot", "🟢 Сервис платежей и API запущен")
 ThreadingHTTPServer(("127.0.0.1", 3001), H).serve_forever()
 UPDEOF
 cat > "$APP_DIR/admin.py.new" <<'UPDEOF'
@@ -755,6 +765,7 @@ def out_of_rating(uid, v, hd=None):
 
 def _alert(uid, rec, why, claimed):
     """Сообщение админу с кнопками (не чаще раза в 6 часов на игрока)."""
+    notify("sec", "🚨 Флаг: %s — %s" % (_nm(uid), _mclean(why, 100)), key="flag" + str(uid), every=21600)
     bot = _BOT; aid = _admin_id()
     if not bot or not aid: return
     if time.time() - rec.get("fa", 0) < 6 * 3600: return
@@ -796,6 +807,8 @@ def record_snapshot(uid, name, lvl, xp, coins, snap, tm=0, ex=None):
             _alert(str(uid), bad, why, (nxp, ncoins))
             d[str(uid)] = bad; _psave(d)
             return False
+        if not old:
+            notify("new", "🆕 Новый игрок: <b>%s</b> (<code>%s</code>), ур. %s" % (_clean(name) or "Фермер", uid, max(1, int(lvl or 1))))
         wk = week_id(now)
         rec = {
             "name": _clean(name) or "Фермер",
@@ -1114,6 +1127,8 @@ def queue(uid, grant):
 
 
 def log(admin, uid, grant):
+    try: notify("adm", "🛠 Админ <code>%s</code> → <code>%s</code>: %s" % (admin, uid, _mclean(grant, 160)))
+    except Exception: pass
     try:
         with open(LOGF, "a", encoding="utf-8") as f:
             f.write("%s admin=%s -> %s : %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), admin, uid, grant))
@@ -1210,6 +1225,7 @@ def ban_set(admin_id, uid, reason):
     _dsave(d); _BC["m"] = -1
     hide_set(uid, True)
     log(admin_id, uid, "BAN: " + reason)
+    notify("sec", "🚫 Бан: %s — %s" % (_nm(uid), _mclean(reason, 120)))
 
 
 def unban(admin_id, uid):
@@ -1219,6 +1235,54 @@ def unban(admin_id, uid):
     hide_set(uid, False)
     log(admin_id, uid, "UNBAN")
     return ok
+
+
+LOGKINDS = [("new", "🆕 Новые игроки", 1), ("pay", "💰 Покупки", 1), ("sec", "🚨 Безопасность и баны", 1),
+            ("adm", "🛠 Действия админов", 1), ("err", "❗ Ошибки сервера", 1), ("boot", "🟢 Запуск сервисов", 1),
+            ("act", "🤝 Почта и помощь соседям", 0)]
+JF = os.path.join(HERE, "events.log")
+_nt = {}            # троттлинг одинаковых событий
+_nq = []            # метки времени последних отправок
+
+
+def _logcfg():
+    c = _dload().get("logcfg") or {}
+    return {k: bool(c.get(k, dflt)) for k, _t, dflt in LOGKINDS}
+
+
+def notify(kind, text, key=None, every=0):
+    """Журнал событий: пишет в events.log всегда, а админу в личку присылает, если вид событий включён.
+    every — не чаще раза в N секунд для одного key."""
+    try:
+        now = time.time()
+        if every:
+            kk = (kind, key or text)
+            if now - _nt.get(kk, 0) < every: return
+            _nt[kk] = now
+            if len(_nt) > 2000: _nt.clear()
+        plain = re.sub(r"<[^>]+>", "", str(text))
+        try:
+            if os.path.exists(JF) and os.path.getsize(JF) > 2_000_000:
+                os.replace(JF, JF + ".1")
+            with open(JF, "a", encoding="utf-8") as f:
+                f.write("%s [%s] %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), kind, plain.replace("\n", " | ")))
+        except Exception: pass
+        bot = _BOT; aid = _admin_id()
+        if not bot or not aid or not _logcfg().get(kind, False): return
+        _nq[:] = [t for t in _nq if now - t < 60]
+        if len(_nq) >= 20: return              # защита от лавины: в журнал пишется, в личку нет
+        _nq.append(now)
+        def _s():
+            try: bot.send_message(int(aid), text, parse_mode="HTML", disable_notification=kind in ("act", "adm"))
+            except Exception: pass
+        threading.Thread(target=_s, daemon=True).start()
+    except Exception:
+        pass
+
+
+def _nm(uid):
+    v = _pload().get(str(uid)) or {}
+    return "<b>%s</b> (<code>%s</code>)" % (_clean(v.get("name"), 24) or "?", uid)
 
 
 def reset_player(admin_id, uid, reason):
@@ -1239,6 +1303,30 @@ def reset_player(admin_id, uid, reason):
     except Exception: pass
     log(admin_id, uid, "RESET: " + reason)
     return gid
+
+
+_mail0 = mail_api
+_help0 = help_api
+
+
+def mail_api(body, bot=None):
+    r = _mail0(body, bot)
+    try:
+        if body.get("op") == "send" and isinstance(r, dict) and r.get("ok"):
+            uid = P.user_id(body.get("initData", ""))
+            notify("act", "✉️ Почта: %s отправил подарок" % _nm(uid))
+    except Exception: pass
+    return r
+
+
+def help_api(body, bot=None):
+    r = _help0(body, bot)
+    try:
+        if isinstance(r, dict) and r.get("ok"):
+            uid = P.user_id(body.get("initData", ""))
+            notify("act", "🤝 Помощь: %s помог соседу" % _nm(uid))
+    except Exception: pass
+    return r
 
 
 def ann_get():
@@ -1302,6 +1390,9 @@ def install(bot):
     if getattr(bot, "_admin_installed", False) or not AID:
         return
     bot._admin_installed = True
+    global _BOT
+    if _BOT is None: _BOT = bot
+    notify("boot", "🟢 Бот запущен")
 
     def is_admin(uid):
         return str(uid) == AID
@@ -1321,7 +1412,8 @@ def install(bot):
     def main_menu():
         return ("🛠 <b>Админ-панель «Мини-ферма»</b>\nВыберите раздел.",
                 kb([[("👥 Игроки", "adm:l:0"), ("📊 Статистика", "adm:s")],
-                    [("📢 Объявление", "adm:an"), ("ℹ️ Команды", "adm:h")]]))
+                    [("📢 Объявление", "adm:an"), ("📜 Логи", "adm:lgm")],
+                    [("ℹ️ Команды", "adm:h")]]))
 
     def stats_text():
         d = _pload(); now = time.time()
@@ -1351,6 +1443,7 @@ def install(bot):
             "\n<b>Объявления и сброс</b>\n"
             "/announce &lt;текст&gt; — объявление всем, кто активировал бота (в личку + окно в игре), с подтверждением\n"
             "/flags — кого пометила защита от накрутки (кнопки: оставить / обнулить / спрятать)\n"
+            "/logs — какие события присылать в личку · /journal [N] [вид] — последние события\n"
             "/ban &lt;игрок&gt; &lt;причина&gt; — ЗАБАНИТЬ (игра блокируется, причина на экране), /unban &lt;игрок&gt;, /bans — список\n"
             "/hide &lt;игрок&gt; — спрятать из рейтингов и списка ферм (читеры), /unhide — вернуть\n"
             "/reset &lt;игрок&gt; &lt;причина&gt; — ОБНУЛИТЬ прогресс игрока; причина покажется у него на экране (с подтверждением)\n\n"
@@ -1585,6 +1678,38 @@ def install(bot):
             rows.append("🚫 <b>%s</b> <code>%s</code>\n   %s" % ((pl.get(u) or {}).get("name", "?"), u, _mclean(x.get("r", ""), 120)))
         bot.send_message(m.chat.id, "<b>Баны (%d)</b>\n\n%s\n\nСнять: /unban id" % (len(b), "\n".join(rows)), parse_mode="HTML")
 
+    def logs_menu():
+        c = _logcfg()
+        rows = [[("%s %s" % ("✅" if c[k] else "▫️", t), "adm:lg:" + k)] for k, t, _d in LOGKINDS]
+        rows.append([("🔔 Все вкл", "adm:lg:+"), ("🔕 Все выкл", "adm:lg:-")])
+        rows.append([("📜 Последние события", "adm:lj"), ("⬅ Меню", "adm:m")])
+        return ("📜 <b>Уведомления о событиях</b>\nНажмите на пункт, чтобы включить или выключить личные сообщения. "
+                "Журнал в любом случае ведётся: /journal [число]", kb(rows))
+
+    def journal_text(n=25, kind=None):
+        try:
+            with open(JF, encoding="utf-8") as f: lines = f.read().splitlines()[-4000:]
+        except Exception:
+            lines = []
+        if kind: lines = [l for l in lines if "[%s]" % kind in l]
+        lines = lines[-n:]
+        if not lines: return "Журнал пуст."
+        import html as _h
+        return "<b>Последние события (%d)</b>\n<pre>%s</pre>" % (len(lines), _h.escape("\n".join(l[5:] for l in lines))[-3500:])
+
+    @bot.message_handler(commands=["logs"])
+    def _logs(m):
+        if not is_admin(m.from_user.id): return
+        t, k = logs_menu(); bot.send_message(m.chat.id, t, parse_mode="HTML", reply_markup=k)
+
+    @bot.message_handler(commands=["journal"])
+    def _journal(m):
+        if not is_admin(m.from_user.id): return
+        q = (m.text or "").split()[1:]
+        n = int(q[0]) if q and q[0].isdigit() else 25
+        kind = next((x for x in q if x in [k for k, _t, _d in LOGKINDS]), None)
+        bot.send_message(m.chat.id, journal_text(max(1, min(n, 60)), kind), parse_mode="HTML")
+
     @bot.message_handler(commands=["cancel"])
     def _cancel(m):
         if not is_admin(m.from_user.id): return
@@ -1620,6 +1745,18 @@ def install(bot):
                 ask_reset(mm.chat.id, uid, mm.text.strip()[:300])
             bot.register_next_step_handler(msg, _got)
             return
+        elif act == "lg":
+            d_ = _dload(); cfg_ = d_.get("logcfg") or {}; cur_ = _logcfg()
+            if rest in ("+", "-"):
+                cfg_ = {k: rest == "+" for k, _t, _d in LOGKINDS}
+            elif rest in cur_:
+                cfg_[rest] = not cur_[rest]
+            d_["logcfg"] = cfg_; _dsave(d_)
+            show(*logs_menu()); bot.answer_callback_query(c.id); return
+        elif act == "lj":
+            show(journal_text(25), kb([[("⬅ Назад", "adm:lgm")]])); bot.answer_callback_query(c.id); return
+        elif act == "lgm":
+            show(*logs_menu()); bot.answer_callback_query(c.id); return
         elif act == "bn":
             bot.answer_callback_query(c.id)
             v = _pload().get(str(rest)) or {}
@@ -1686,7 +1823,7 @@ def install(bot):
         broadcast.install(bot)          # рассылка-приглашение: свои 4 обработчика (запись, /stop, /resume, /bc)
     except Exception as e:
         print("broadcast не подключён:", e, flush=True)
-    first("message_handlers", 20)
+    first("message_handlers", 22)
     first("callback_query_handlers", 1)
 UPDEOF
 cat > "$APP_DIR/broadcast.py.new" <<'UPDEOF'
