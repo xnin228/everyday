@@ -594,6 +594,7 @@ class H(BaseHTTPRequestHandler):
             if self.path == "/invoice": return self._send(200, payments.api_invoice(bot, body))
             if self.path == "/claim":
                 if body.get("op") in ("box", "send", "ack"): return self._send(200, admin.mail_api(body, bot))
+                if body.get("op") == "ann": return self._send(200, {"ok": True, "ann": admin.ann_get()})
                 if body.get("op") == "help": return self._send(200, admin.help_api(body, bot))
                 if body.get("op") == "topweek":
                     u = payments.user_id(body.get("initData", ""))
@@ -1034,6 +1035,67 @@ def describe(grant):
 
 
 # ---------- бот ----------
+def reset_player(admin_id, uid, reason):
+    """Обнуляет прогресс игрока: в очередь ставится выдача adm_reset с причиной (игра покажет её на экране)."""
+    uid = str(uid); reason = _mclean(reason, 300) or "Решение администрации"
+    gid = uuid.uuid4().hex[:12]
+    with P._Lock():
+        d = P._load()
+        d["grants"].setdefault(uid, []).insert(0, {"id": gid, "sku": "adm_reset", "msg": reason})
+        P._save(d)
+        pl = _pload()
+        v = pl.get(uid)
+        if v:
+            v.update({"xp": 0, "lvl": 1, "coins": 0, "wb": 0})
+            v.pop("pwk", None); v.pop("pg", None)
+            _psave(pl)
+    log(admin_id, uid, "RESET: " + reason)
+    return gid
+
+
+def ann_get():
+    d = P._load()
+    return d.get("ann")
+
+
+def announce(bot, admin_id, text, report_chat=None):
+    """Объявление: сохраняется для показа в игре и рассылается в личку всем, кто активировал бота."""
+    text = str(text or "").strip()[:700]
+    if not text: return 0
+    with P._Lock():
+        d = P._load()
+        d["ann"] = {"id": uuid.uuid4().hex[:8], "text": text, "t": int(time.time())}
+        P._save(d)
+    log(admin_id, "ALL", "ANNOUNCE: " + text[:80])
+
+    def _run():
+        from telebot import types
+        try:
+            import broadcast
+            targets = broadcast.recipients()
+            url = broadcast._env("WEBAPP_URL")
+        except Exception:
+            targets = {}; url = ""
+        kb = None
+        if url.startswith("https://"):
+            kb = types.InlineKeyboardMarkup()
+            kb.add(types.InlineKeyboardButton("🌾 Открыть игру", web_app=types.WebAppInfo(url)))
+        sent = 0
+        for cid in targets:
+            try:
+                bot.send_message(int(cid), "📢 " + text, reply_markup=kb)
+                sent += 1
+            except Exception as e:
+                s = str(e)
+                if "429" in s: time.sleep(5)
+            time.sleep(0.05)
+        if report_chat:
+            try: bot.send_message(report_chat, "📢 Объявление разослано: %d из %d." % (sent, len(targets)))
+            except Exception: pass
+    threading.Thread(target=_run, daemon=True).start()
+    return 1
+
+
 def _admin_id():
     v = os.environ.get("ADMIN_ID", "")
     if not v:
@@ -1071,7 +1133,7 @@ def install(bot):
     def main_menu():
         return ("🛠 <b>Админ-панель «Мини-ферма»</b>\nВыберите раздел.",
                 kb([[("👥 Игроки", "adm:l:0"), ("📊 Статистика", "adm:s")],
-                    [("ℹ️ Команды", "adm:h")]]))
+                    [("📢 Объявление", "adm:an"), ("ℹ️ Команды", "adm:h")]]))
 
     def stats_text():
         d = _pload(); now = time.time()
@@ -1097,7 +1159,10 @@ def install(bot):
             "\n<b>Акции и погода</b> (подробно — просто напиши команду без параметров)\n"
             "/event — список акций · /event x2 60 — запустить · /event off x2 — выключить одну · /event off — все\n"
             "/weather — статус · /weather rain 60 — включить · /weather off — выключить совсем · /weather auto — по умолчанию\n"
-            "/stop /resume — рассылка-приглашение, /bc — разослать сейчас\n\n"
+            "/stop /resume — рассылка-приглашение, /bc — разослать сейчас\n"
+            "\n<b>Объявления и сброс</b>\n"
+            "/announce &lt;текст&gt; — объявление всем, кто активировал бота (в личку + окно в игре), с подтверждением\n"
+            "/reset &lt;игрок&gt; &lt;причина&gt; — ОБНУЛИТЬ прогресс игрока; причина покажется у него на экране (с подтверждением)\n\n"
             "&lt;игрок&gt; — Telegram id или часть имени.\n"
             "Выдача придёт игроку при открытии игры (в течение ~25 секунд, если игра открыта).")
 
@@ -1130,6 +1195,7 @@ def install(bot):
             [("🧪 +10", "adm:g:%s:fert:10" % u), ("📦", "adm:g:%s:chest_c" % u), ("💎", "adm:g:%s:chest_r" % u), ("👑", "adm:g:%s:chest_l" % u)],
             [("👑 VIP 30д", "adm:g:%s:vip" % u), ("🎫 Пропуск", "adm:g:%s:bp" % u)],
             [("⚡×2 1д", "adm:g:%s:bx_2_1" % u), ("⚡×5 1д", "adm:g:%s:bx_5_1" % u), ("⚡×10 1д", "adm:g:%s:bx_10_1" % u)],
+            [("🗑 Обнулить прогресс", "adm:rs:%s" % u)],
             [("⬅ К списку", "adm:l:0"), ("🔄", "adm:p:%s" % u)]])
         return t, k
 
@@ -1222,6 +1288,49 @@ def install(bot):
     @bot.message_handler(commands=["take"])
     def _take(m): give_take(m, -1)
 
+    PEND = {}                           # токен -> ожидающее подтверждения действие
+
+    def ask(chat, kind, payload, text):
+        tok = uuid.uuid4().hex[:8]
+        PEND[tok] = (kind, payload)
+        if len(PEND) > 50: PEND.pop(next(iter(PEND)))
+        bot.send_message(chat, text, parse_mode="HTML", reply_markup=kb([[("✅ Да, выполнить", "adm:ok:" + tok), ("❌ Отмена", "adm:no:" + tok)]]))
+
+    def ask_reset(chat, uid, reason):
+        v = _pload().get(str(uid)) or {}
+        ask(chat, "reset", (str(uid), reason),
+            "⚠️ <b>Обнулить прогресс?</b>\nИгрок: <b>%s</b> (<code>%s</code>), ур. %s\nПричина на экране игрока:\n<i>%s</i>\n\nЭто нельзя отменить." % (
+                v.get("name", "?"), uid, v.get("lvl", "?"), _mclean(reason, 300)))
+
+    @bot.message_handler(commands=["reset"])
+    def _reset(m):
+        if not is_admin(m.from_user.id): return
+        a_ = (m.text or "").split(None, 2)
+        if len(a_) < 3:
+            return bot.reply_to(m, "Пример: /reset 123456789 Накрутка опыта через баг\nПричина обязательна — игрок увидит её на экране.")
+        uid, rec = resolve(a_[1])
+        if not uid:
+            return bot.reply_to(m, "Игрок не найден или найдено несколько. Используйте /find.")
+        ask_reset(m.chat.id, uid, a_[2])
+
+    @bot.message_handler(commands=["announce"])
+    def _announce(m):
+        if not is_admin(m.from_user.id): return
+        q = (m.text or "").split(None, 1)
+        if len(q) < 2 or not q[1].strip():
+            return bot.reply_to(m, "Пример: /announce Завтра в 20:00 стартует новый ивент!\nТекст уйдёт всем, кто активировал бота, и появится окном в игре.")
+        try:
+            import broadcast
+            n = len(broadcast.recipients())
+        except Exception:
+            n = 0
+        ask(m.chat.id, "ann", q[1].strip()[:700], "📢 <b>Отправить объявление %d получателям?</b>\n\n%s" % (n, _mclean(q[1], 700)))
+
+    @bot.message_handler(commands=["cancel"])
+    def _cancel(m):
+        if not is_admin(m.from_user.id): return
+        bot.send_message(m.chat.id, "Отменено.")
+
     @bot.callback_query_handler(func=lambda c: (c.data or "").startswith("adm:"))
     def _cb(c):
         if not is_admin(c.from_user.id):
@@ -1240,6 +1349,34 @@ def install(bot):
         elif act == "s": show(stats_text(), kb([[("⬅ Меню", "adm:m")]]))
         elif act == "h": show(HELP, kb([[("⬅ Меню", "adm:m")]]))
         elif act == "l": show(*page(int(rest or 0)))
+        elif act == "an":
+            show("📢 <b>Объявление</b>\nОтправьте команду:\n<code>/announce Текст объявления</code>\nПредпросмотр и подтверждение будут перед отправкой.", kb([[("⬅ Меню", "adm:m")]]))
+        elif act == "rs":
+            bot.answer_callback_query(c.id)
+            v = _pload().get(str(rest)) or {}
+            msg = bot.send_message(chat, "🗑 Обнуление игрока <b>%s</b>. Напишите причину одним сообщением (она появится у игрока на экране) или /cancel." % v.get("name", rest), parse_mode="HTML")
+            def _got(mm, uid=str(rest)):
+                if not is_admin(mm.from_user.id) or not (mm.text or "").strip() or mm.text.startswith("/"):
+                    return bot.send_message(mm.chat.id, "Отменено.")
+                ask_reset(mm.chat.id, uid, mm.text.strip()[:300])
+            bot.register_next_step_handler(msg, _got)
+            return
+        elif act in ("ok", "no"):
+            pe = PEND.pop(rest, None)
+            if not pe:
+                bot.answer_callback_query(c.id, "Уже обработано или устарело"); return
+            if act == "no":
+                show("❌ Отменено."); bot.answer_callback_query(c.id); return
+            kind, pl = pe
+            if kind == "reset":
+                reset_player(c.from_user.id, pl[0], pl[1])
+                try: bot.send_message(int(pl[0]), "⚠️ Ваш прогресс в «Мини-ферме» обнулён.\nПричина: %s" % pl[1])
+                except Exception: pass
+                show("✅ Прогресс игрока обнулён. Он увидит причину при открытии игры.")
+            elif kind == "ann":
+                announce(bot, c.from_user.id, pl, chat)
+                show("📢 Рассылка запущена, отчёт придёт сообщением.")
+            bot.answer_callback_query(c.id); return
         elif act == "p": show(*card(rest))
         elif act == "g":
             uid, _, code = rest.partition(":")
@@ -1254,7 +1391,7 @@ def install(bot):
         broadcast.install(bot)          # рассылка-приглашение: свои 4 обработчика (запись, /stop, /resume, /bc)
     except Exception as e:
         print("broadcast не подключён:", e, flush=True)
-    first("message_handlers", 10)
+    first("message_handlers", 13)
     first("callback_query_handlers", 1)
 UPDEOF
 cat > "$APP_DIR/broadcast.py.new" <<'UPDEOF'
