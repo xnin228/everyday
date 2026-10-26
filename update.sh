@@ -115,11 +115,11 @@ class H(BaseHTTPRequestHandler):
         if p == "/event":
             return self._send(200, {"now": int(time.time() * 1000), "event": active_event(), "events": active_events(), "weather": weather_now()})
         if p == "/top":
-            with LK:
-                dd = load(); sc = dd["scores"]; hid_ = set(str(x) for x in (dd.get("hidden") or []))
-            sc = {k: v for k, v in sc.items() if k not in hid_ and v.get("xp", 0) < 10 ** 9}
-            rows = sorted(sc.items(), key=lambda kv: kv[1].get("xp", 0), reverse=True)[:50]
-            return self._send(200, [{"id": k, "name": v.get("name", "Фермер"), "xp": v.get("xp", 0)} for k, v in rows])
+            try:
+                import admin
+                return self._send(200, admin.top_all(50))
+            except Exception:
+                return self._send(200, [])
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
@@ -136,8 +136,7 @@ class H(BaseHTTPRequestHandler):
             xp = max(0, min(10 ** 9, int(b.get("xp") or 0)))
             with LK:
                 d = load()
-                if i in set(str(x) for x in (d.get("hidden") or [])) or xp >= 10 ** 9:
-                    return self._send(200, {"ok": True})
+                return self._send(200, {"ok": True})     # рейтинг теперь считается из проверенных снимков (/snap), этот приём отключён
                 d["scores"][i] = {"name": clean(b.get("name")) or "Фермер", "xp": xp, "lvl": int(b.get("lvl") or 1), "t": int(time.time())}
                 save(d)
             self._send(200, {"ok": True})
@@ -572,12 +571,28 @@ for line in open(os.path.join(here, ".env"), encoding="utf-8"):
         k, v = line.strip().split("=", 1); env[k] = v.strip().strip("\"'")
 token = env["BOT_TOKEN"]; bot = telebot.TeleBot(token); payments._TOKEN = token
 
+admin._BOT = bot
+import time as _t, collections as _c
+_RL = {}
+def _rate_ok(ip, limit=240, window=60):
+    """Не больше `limit` запросов в минуту с одного адреса."""
+    now = _t.time(); q = _RL.setdefault(ip, _c.deque())
+    while q and q[0] < now - window: q.popleft()
+    if len(q) >= limit: return False
+    q.append(now)
+    if len(_RL) > 5000:
+        for k in [k for k, v in _RL.items() if not v or v[-1] < now - window]: _RL.pop(k, None)
+    return True
+
 class H(BaseHTTPRequestHandler):
+    def _ip(self):
+        return (self.headers.get("X-Forwarded-For") or self.client_address[0]).split(",")[0].strip()
     def _send(self, code, obj):
         b = json.dumps(obj, ensure_ascii=False).encode(); self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8"); self.send_header("Content-Length", str(len(b)))
         self.end_headers(); self.wfile.write(b)
     def do_GET(self):
+        if not _rate_ok(self._ip()): return self._send(429, {"error": "too many requests"})
         u = urlparse(self.path)
         try:
             if u.path == "/farms": return self._send(200, admin.farms_list(50))
@@ -588,6 +603,7 @@ class H(BaseHTTPRequestHandler):
             return self._send(500, {"error": str(e)[:100]})
         self._send(404, {"error": "not found"})
     def do_POST(self):
+        if not _rate_ok(self._ip()): return self._send(429, {"error": "too many requests"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
             if n > 60000: return self._send(413, {"error": "too large"})
@@ -607,7 +623,7 @@ class H(BaseHTTPRequestHandler):
             if self.path == "/snap":
                 uid = payments.user_id(body.get("initData", ""))
                 if not uid: return self._send(200, {"ok": False})
-                ok = admin.record_snapshot(uid, body.get("name"), body.get("lvl"), body.get("xp"), body.get("coins"), body.get("snap"))
+                ok = admin.record_snapshot(uid, body.get("name"), body.get("lvl"), body.get("xp"), body.get("coins"), body.get("snap"), 1 if body.get("tm") else 0)
                 return self._send(200, {"ok": bool(ok)})
         except Exception as e:
             return self._send(500, {"error": str(e)[:100]})
@@ -691,7 +707,62 @@ def _clean(s, n=24):
     return re.sub(r"[<>&\"'`]", "", str(s or ""))[:n].strip()
 
 
-def record_snapshot(uid, name, lvl, xp, coins, snap):
+XP_ABS_MAX = 30_000_000      # выше — нереально, сразу под подозрение
+XP_NEW_MAX = 5_000_000       # потолок для самого первого снимка игрока
+XP_BASE = 30_000             # разрешённый рост опыта между снимками: база + в час
+XP_PER_H = 60_000
+COINS_ABS_MAX = 500_000_000
+LVX = 32                     # как в игре: уровень = floor(sqrt(xp / 32)) + 1
+_BOT = None                  # сюда payments_http кладёт объект бота — для уведомлений админу
+
+
+def _suspicious(old, xp, lvl, coins, now, tm):
+    """Возвращает причину подозрения или None."""
+    if old.get("trust") or old.get("tu", 0) > now:
+        return None
+    if tm: return "изменено сохранение на телефоне (подпись не совпала)"
+    if xp >= XP_ABS_MAX: return "опыт %d выше возможного" % xp
+    if coins >= COINS_ABS_MAX: return "монет %d выше возможного" % coins
+    lv2 = int((xp / LVX) ** 0.5) + 1
+    if abs(int(lvl or 1) - lv2) > 1: return "уровень %s не соответствует опыту %d" % (lvl, xp)
+    if not old:
+        if xp > XP_NEW_MAX: return "новый игрок сразу с опытом %d" % xp
+        return None
+    dt = max(0.0, now - old.get("seen", now)); hours = min(dt / 3600.0, 24 * 30)
+    allowed = XP_BASE + XP_PER_H * hours
+    if xp - old.get("xp", 0) > allowed:
+        return "опыт вырос на %d за %.1f ч (допустимо ~%d)" % (xp - old.get("xp", 0), hours, allowed)
+    oc = old.get("coins", 0)
+    if coins > oc * 50 + 5_000_000: return "монеты выросли с %d до %d" % (oc, coins)
+    return None
+
+
+def out_of_rating(uid, v, hd=None):
+    hd = hidden_ids() if hd is None else hd
+    return str(uid) in hd or bool(v.get("flag"))
+
+
+def _alert(uid, rec, why, claimed):
+    """Сообщение админу с кнопками (не чаще раза в 6 часов на игрока)."""
+    bot = _BOT; aid = _admin_id()
+    if not bot or not aid: return
+    if time.time() - rec.get("fa", 0) < 6 * 3600: return
+    rec["fa"] = int(time.time())
+    from telebot import types
+    k = types.InlineKeyboardMarkup()
+    k.row(types.InlineKeyboardButton("✅ Оставить", callback_data="adm:fk:%s" % uid),
+          types.InlineKeyboardButton("🗑 Обнулить", callback_data="adm:fr:%s" % uid))
+    k.row(types.InlineKeyboardButton("🙈 Спрятать навсегда", callback_data="adm:fh:%s" % uid))
+    txt = ("🚨 <b>Подозрение на накрутку</b>\nИгрок: <b>%s</b> (<code>%s</code>)\nПричина: %s\n"
+           "Заявлено: опыт %s, монет %s\n\nПока он скрыт из рейтингов и списка ферм, его цифры не приняты."
+           % (_clean(rec.get("name"), 24), uid, _mclean(why, 160), claimed[0], claimed[1]))
+    def _s():
+        try: bot.send_message(int(aid), txt, parse_mode="HTML", reply_markup=k)
+        except Exception: pass
+    threading.Thread(target=_s, daemon=True).start()
+
+
+def record_snapshot(uid, name, lvl, xp, coins, snap, tm=0):
     """Сохраняет снимок фермы игрока (вызывается из HTTP-сервиса)."""
     now = time.time()
     with _lk:
@@ -705,15 +776,26 @@ def record_snapshot(uid, name, lvl, xp, coins, snap):
         d = _pload()
         old = d.get(str(uid)) or {}
         nxp = max(0, min(10 ** 9, int(xp or 0)))
+        ncoins = max(0, min(10 ** 12, int(coins or 0)))
+        why = _suspicious(old, nxp, lvl, ncoins, now, 1 if tm else 0)
+        if why:
+            # цифры не принимаем: оставляем старые данные, помечаем игрока
+            bad = dict(old) if old else {"name": _clean(name) or "Фермер", "lvl": 1, "xp": 0, "coins": 0, "snap": {"w": "farm"}}
+            bad["seen"] = int(now); bad["flag"] = {"t": int(now), "why": why, "xp": nxp, "coins": ncoins}
+            _alert(str(uid), bad, why, (nxp, ncoins))
+            d[str(uid)] = bad; _psave(d)
+            return False
         wk = week_id(now)
         rec = {
             "name": _clean(name) or "Фермер",
             "lvl": max(1, min(999, int(lvl or 1))),
             "xp": nxp,
-            "coins": max(0, min(10 ** 12, int(coins or 0))),
+            "coins": ncoins,
             "seen": int(now),
             "snap": snap,
         }
+        for _k in ("flag", "trust", "tu", "fa"):
+            if _k in old: rec[_k] = old[_k]
         if old.get("wk") == wk:
             rec["wk"], rec["wb"] = wk, min(old.get("wb", nxp), nxp)
             if "pwk" in old:
@@ -747,7 +829,7 @@ def top_week(uid):
     """Недельный рейтинг: прирост опыта с понедельника."""
     w = week_id(); d = _pload()
     hd = hidden_ids()
-    rows = [(u, _week_gain(v, w), v) for u, v in d.items() if u not in hd]
+    rows = [(u, _week_gain(v, w), v) for u, v in d.items() if not out_of_rating(u, v, hd)]
     rows = [r for r in rows if r[1] > 0]
     rows.sort(key=lambda r: r[1], reverse=True)
     out = [{"id": hid(u), "name": v.get("name", "Фермер"), "lvl": v.get("lvl", 1), "gain": g,
@@ -769,7 +851,7 @@ def week_tick(bot=None):
             return
         pl = _pload()
         hd = hidden_ids()
-        rows = sorted([(u, _week_gain(v, last)) for u, v in pl.items() if u not in hd], key=lambda r: r[1], reverse=True)
+        rows = sorted([(u, _week_gain(v, last)) for u, v in pl.items() if not out_of_rating(u, v, hd)], key=lambda r: r[1], reverse=True)
         rows = [r for r in rows if r[1] > 0][:3]
         for i, (u, g) in enumerate(rows):
             c, egg, et = WEEK_PRIZES[i]
@@ -787,11 +869,19 @@ def week_tick(bot=None):
                 pass
 
 
+def top_all(limit=50):
+    """Общий рейтинг из проверенных снимков (для GET /top)."""
+    d = _pload(); hd = hidden_ids(); cutoff = time.time() - 90 * 86400
+    rows = [(u, v) for u, v in d.items() if v.get("seen", 0) > cutoff and not out_of_rating(u, v, hd) and v.get("xp", 0) < XP_ABS_MAX]
+    rows.sort(key=lambda r: r[1].get("xp", 0), reverse=True)
+    return [{"id": u, "name": v.get("name", "Фермер"), "xp": v.get("xp", 0)} for u, v in rows[:limit]]
+
+
 def farms_list(limit=50):
     d = _pload()
     cutoff = time.time() - 60 * 86400
     hd = hidden_ids()
-    rows = [(u, v) for u, v in d.items() if v.get("seen", 0) > cutoff and u not in hd]
+    rows = [(u, v) for u, v in d.items() if v.get("seen", 0) > cutoff and not out_of_rating(u, v, hd)]
     rows.sort(key=lambda r: r[1].get("xp", 0), reverse=True)
     t = time.time() - ONLINE_SEC
     return [{"id": hid(u), "name": v.get("name", "Фермер"), "lvl": v.get("lvl", 1),
@@ -998,6 +1088,14 @@ def grant_str(code):
 
 
 def queue(uid, grant):
+    try:
+        big = grant.startswith("adm_lvl") or (grant.startswith("adm_coins_") and abs(int(grant[10:] or 0)) >= 1_000_000)
+        if big:
+            with P._Lock():
+                pl = _pload(); r = pl.get(str(uid))
+                if r is not None: r["tu"] = int(time.time()) + 3600; _psave(pl)
+    except Exception:
+        pass
     with P._Lock():
         d = P._load()
         d["grants"].setdefault(str(uid), []).append({"id": uuid.uuid4().hex[:12], "sku": grant})
@@ -1088,7 +1186,7 @@ def reset_player(admin_id, uid, reason):
         pl = _pload()
         v = pl.get(uid)
         if v:
-            v.update({"xp": 0, "lvl": 1, "coins": 0, "wb": 0})
+            v.update({"xp": 0, "lvl": 1, "coins": 0, "wb": 0}); v.pop("flag", None)
             v.pop("pwk", None); v.pop("pg", None)
             _psave(pl)
     try: score_drop(uid)
@@ -1206,6 +1304,7 @@ def install(bot):
             "/stop /resume — рассылка-приглашение, /bc — разослать сейчас\n"
             "\n<b>Объявления и сброс</b>\n"
             "/announce &lt;текст&gt; — объявление всем, кто активировал бота (в личку + окно в игре), с подтверждением\n"
+            "/flags — кого пометила защита от накрутки (кнопки: оставить / обнулить / спрятать)\n"
             "/hide &lt;игрок&gt; — спрятать из рейтингов и списка ферм (читеры), /unhide — вернуть\n"
             "/reset &lt;игрок&gt; &lt;причина&gt; — ОБНУЛИТЬ прогресс игрока; причина покажется у него на экране (с подтверждением)\n\n"
             "&lt;игрок&gt; — Telegram id или часть имени.\n"
@@ -1386,6 +1485,18 @@ def install(bot):
     @bot.message_handler(commands=["unhide"])
     def _unhide(m): hide_cmd(m, False)
 
+    @bot.message_handler(commands=["flags"])
+    def _flags(m):
+        if not is_admin(m.from_user.id): return
+        pl = _pload(); hd = hidden_ids()
+        fl = [(u, v) for u, v in pl.items() if v.get("flag")]
+        t = "🚨 <b>Помечены проверкой</b> (%d)\n" % len(fl)
+        for u, v in fl[:20]:
+            t += "• %s (<code>%s</code>): %s\n" % (_clean(v.get("name"), 20), u, _mclean((v.get("flag") or {}).get("why"), 100))
+        t += "\n🙈 Спрятаны вручную: %d" % len(hd)
+        bot.send_message(m.chat.id, t, parse_mode="HTML",
+                         reply_markup=kb([[(_clean(v.get("name"), 18), "adm:p:" + u)] for u, v in fl[:8]]) if fl else None)
+
     @bot.message_handler(commands=["cancel"])
     def _cancel(m):
         if not is_admin(m.from_user.id): return
@@ -1421,6 +1532,27 @@ def install(bot):
                 ask_reset(mm.chat.id, uid, mm.text.strip()[:300])
             bot.register_next_step_handler(msg, _got)
             return
+        elif act in ("fk", "fr", "fh"):
+            uid_ = str(rest)
+            if act == "fk":
+                with P._Lock():
+                    pl = _pload(); r = pl.get(uid_)
+                    if r is not None: r.pop("flag", None); r["trust"] = 1; _psave(pl)
+                show("✅ Оставлен. Игрок доверенный, проверки для него отключены."); bot.answer_callback_query(c.id); return
+            if act == "fh":
+                with P._Lock():
+                    pl = _pload(); r = pl.get(uid_)
+                    if r is not None: r.pop("flag", None); _psave(pl)
+                hide_set(uid_, True)
+                show("🙈 Спрятан из рейтингов и списка ферм навсегда."); bot.answer_callback_query(c.id); return
+            reason_ = "Подозрение на накрутку: данные игры не прошли проверку сервера"
+            with P._Lock():
+                pl = _pload(); r = pl.get(uid_)
+                if r is not None: r.pop("flag", None); _psave(pl)
+            reset_player(c.from_user.id, uid_, reason_)
+            try: bot.send_message(int(uid_), "⚠️ Ваш прогресс в «Мини-ферме» обнулён.\nПричина: %s" % reason_)
+            except Exception: pass
+            show("🗑 Прогресс обнулён, игрок увидит причину в игре."); bot.answer_callback_query(c.id); return
         elif act in ("ok", "no"):
             pe = PEND.pop(rest, None)
             if not pe:
@@ -1451,7 +1583,7 @@ def install(bot):
         broadcast.install(bot)          # рассылка-приглашение: свои 4 обработчика (запись, /stop, /resume, /bc)
     except Exception as e:
         print("broadcast не подключён:", e, flush=True)
-    first("message_handlers", 15)
+    first("message_handlers", 16)
     first("callback_query_handlers", 1)
 UPDEOF
 cat > "$APP_DIR/broadcast.py.new" <<'UPDEOF'
