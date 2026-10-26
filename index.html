@@ -1856,7 +1856,7 @@ function mkSnap(){
   return{w:wid(),ld:S.ld||0,u:S.unlocked,pl:pl,o:S.obj.map(function(o){return[o.k,o.x,o.y,(o.f||[]).length,o.s||'',o.m?1:0]}),sk:skClean(S.sk),bl:(S.bl&&Object.keys(S.bl).length?blClean(S.bl):undefined),pt:((S.pp&&S.pp.act)||[]).map(petOf).filter(Boolean).map(function(p){return[p.pid,p.lv,p.fed>Date.now()?1:0]}),l:((S.lake&&S.lake.f)||[]).length,pn:S.pen.map(function(t){return t?1:0}),pet:S.pet?1:0,dog:S.dog?1:0,fn:S.fname||''}}
 function snapPost(){
   if(!API||!S)return;var tg=window.Telegram&&Telegram.WebApp;if(!tg||!tg.initData)return;
-  api('/snap',{name:S.fname||myName(),lvl:lvl(),xp:S.xp,coins:S.coins,tm:S.tm?1:0,ch:((S.ch||{}).c|0)+((S.ch||{}).r|0)+((S.ch||{}).l|0),fe:S.fert|0,snap:mkSnap()}).catch(function(){})}
+  api('/snap',{name:S.fname||myName(),lvl:lvl(),xp:S.xp,coins:S.coins,tm:S.tm?1:0,ch:((S.ch||{}).c|0)+((S.ch||{}).r|0)+((S.ch||{}).l|0),fe:S.fert|0,cd:{c:(S.ch||{}).c|0,r:(S.ch||{}).r|0,l:(S.ch||{}).l|0},snap:mkSnap()}).catch(function(){})}
 
 
 /* ===== ДОНАТ ЗА ⭐: сундуки, множители, VIP, пропуск ===== */
