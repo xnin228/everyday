@@ -1015,6 +1015,28 @@ viewTop=function(){twLoad();
   h+='<div class="card"'+(r.me?' style="background:var(--gold)"':'')+'><div class="t">'+m+' '+esc(r.name)+'<div class="r">Ур. '+r.lvl+' · +'+r.gain+' опыта за неделю</div></div></div>'});
  return h+'<button class="btn" data-tab="town" style="width:100%">Назад в город</button>'};
 document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button[data-twt]');if(b){TWTAB=+b.dataset.twt;paint()}});
+/* ===== ОБНУЛЕНИЕ ПРОГРЕССА АДМИНОМ + ОБЪЯВЛЕНИЯ ===== */
+function doReset(reason){
+ var keep={};['fname','name','lang','gd','refd','uid','annId'].forEach(function(k){if(S[k]!==undefined)keep[k]=S[k]});
+ var ns=fresh();ns.xv=2;for(var k in keep)ns[k]=keep[k];ns.rst={t:Date.now(),msg:String(reason||'Решение администрации').slice(0,300)};ns.ts=Date.now();
+ try{localStorage.setItem(KEY,JSON.stringify(ns))}catch(e){}
+ try{load()}catch(e){S=ns}
+ try{if(tg()&&tg().CloudStorage)tg().CloudStorage.setItem(KEY,JSON.stringify(ns))}catch(e){}
+ setTimeout(function(){location.reload()},700)}
+function admOverlay(id,html){var o=document.getElementById(id);if(o)o.remove();o=document.createElement('div');o.id=id;
+ o.style.cssText='position:fixed;inset:0;z-index:99990;background:rgba(15,8,4,.9);display:flex;align-items:center;justify-content:center;padding:16px';
+ o.innerHTML=E(html);document.body.appendChild(o);return o}
+function showReset(){if(!S.rst||S.rst.ok)return;
+ var o=admOverlay('rstov','<div style="background:var(--panel);border:4px solid #d9442b;box-shadow:0 0 30px #d9442b;padding:18px;width:100%;max-width:340px;text-align:center"><div style="font-size:34px">⚠️</div><b style="display:block;margin:6px 0 10px;font-size:14px">Ваш прогресс обнулён администратором</b><div class="r" style="margin-bottom:6px">Причина:</div><div style="background:rgba(0,0,0,.08);padding:10px;margin-bottom:14px;font-size:12px;line-height:1.35;white-space:pre-wrap;word-break:break-word">'+esc(S.rst.msg||'')+'</div><button class="btn" id="rstok" style="width:100%">Понятно, начать заново</button></div>');
+ o.querySelector('#rstok').onclick=function(){S.rst.ok=1;save();o.remove();paint()}}
+var ANNT=0;
+function annCheck(){if(!API||!S||Date.now()-ANNT<60000)return;ANNT=Date.now();
+ api('/claim',{op:'ann'}).then(function(j){var a=j&&j.ok&&j.ann;if(!a||!a.id||S.annId===a.id||Date.now()/1000-a.t>7*86400)return;showAnn(a)}).catch(function(){})}
+function showAnn(a){if(document.getElementById('annov')||(S.rst&&!S.rst.ok))return;
+ var o=admOverlay('annov','<div style="background:var(--panel);border:4px solid #e8a317;box-shadow:0 0 30px #e8a317;padding:18px;width:100%;max-width:340px;text-align:center"><div style="font-size:34px">📢</div><b style="display:block;margin:6px 0 10px;font-size:14px">Объявление</b><div style="background:rgba(0,0,0,.08);padding:12px;margin-bottom:14px;font-size:12px;line-height:1.4;white-space:pre-wrap;word-break:break-word;text-align:left">'+esc(a.text)+'</div><button class="btn" id="annok" style="width:100%">Понятно</button></div>');
+ o.querySelector('#annok').onclick=function(){S.annId=a.id;save();o.remove()}}
+var _claimPaid0=claimPaid;claimPaid=function(){_claimPaid0();try{annCheck()}catch(e){}};
+setTimeout(showReset,900);
 /* ===== ПИТОМЦЫ: кейсы с яйцами, инкубатор, уход, бонусы ===== */
 var RAR=[{n:'Обычный',c:'#9fb4cc',b:.02,t:600},{n:'Необычный',c:'#5fd05a',b:.03,t:1800},{n:'Редкий',c:'#4aa8ff',b:.05,t:7200},{n:'Эпический',c:'#c05cff',b:.08,t:21600},{n:'Легендарный',c:'#ffb52e',b:.12,t:43200}];
 var BNM={coins:'монет',xp:'опыта',speed:'роста'};
@@ -1853,7 +1875,7 @@ var CLAIMING=0;
 function claimPaid(){if(!API||!S||CLAIMING)return;CLAIMING=1;
   api('/claim',{v:2}).then(function(j){CLAIMING=0;var ids=[],n=0;
     (j.grants||[]).forEach(function(x){grant(x)});
-    (j.items||[]).forEach(function(g){ids.push(g.id);if(S.gd.indexOf(g.id)<0){S.gd.push(g.id);if(S.gd.length>80)S.gd.shift();n++;grant(g.sku)}});
+    (j.items||[]).forEach(function(g){ids.push(g.id);if(S.gd.indexOf(g.id)<0){S.gd.push(g.id);if(S.gd.length>80)S.gd.shift();n++;if(g.sku==='adm_reset')doReset(g.msg);else grant(g.sku)}});
     if(ids.length){save();api('/claim',{v:2,ack:ids}).catch(function(){})}
   }).catch(function(){CLAIMING=0})}
 function claimSoon(){claimPaid();setTimeout(claimPaid,3000);setTimeout(claimPaid,9000)}
@@ -2034,6 +2056,7 @@ Object.assign(EN,{'Тыквенная долина':'Pumpkin Valley','Надгр
 Object.assign(EN,{'Ночь тыкв':'Pumpkin Night','Тыква-король':'Pumpkin King','эксклюзив ивента · монеты и опыт +3%':'event exclusive · coins and XP +3%','Конфеты':'Candy','Соберите урожай':'Harvest crops','Соберите продукты со двора':'Collect yard products','Выполните заказы':'Complete orders','Испеките выпечку':'Bake pastries','Погладьте питомцев':'Pet your pets','Забрать':'Claim','Получено':'Claimed','Готово':'Done','К ферме':'Back to farm','Ивент закончился. Ждите следующего!':'The event is over. See you at the next one!','Инкубатор полон — освободите место':'Incubator is full — free a slot','Лимит исчерпан':'Limit reached','📋 Задания ивента на сегодня':'📋 Event quests for today','🏆 Награды за прогресс':'🏆 Progress rewards','🛒 Магазин за конфеты':'🛒 Candy shop','📚 Коллекция питомцев':'📚 Pet collection','✅ награда получена':'✅ reward claimed','Полный набор мира даёт монеты.':'A full set of a world gives coins.','🪙 500 монет':'🪙 500 coins','🥚 Яйцо Тыквенной долины':'🥚 Pumpkin Valley egg','🧪 Удобрение ×5':'🧪 Fertilizer ×5','🪙 3000 монет':'🪙 3000 coins','💎 Яйцо Тыквенной долины (редкое+)':'💎 Pumpkin Valley egg (rare+)','👑 Тыква-король (эксклюзивный декор)':'👑 Pumpkin King (exclusive decor)','👑 Королевское яйцо (эпик+)':'👑 Royal egg (epic+)','🪙 1000 монет':'🪙 1000 coins','🧪 Удобрение ×3':'🧪 Fertilizer ×3','⚡ Ускорение ×2 на 30 мин':'⚡ ×2 boost for 30 min'});
 Object.assign(EN,{'Яйцо Тыквенной долины':'Pumpkin Valley egg','Ускорение ×2 на 30 мин':'×2 boost for 30 min','Куплено':'Bought','Всего собрано':'Total collected','до конца ивента':'until the event ends','ещё':'left'});
 Object.assign(EN,{'Помогите соседям':'Help your neighbors','🏆 Неделя':'🏆 Week','⭐ Всё время':'⭐ All time','Рейтинг недели':'Weekly ranking','Призы топ-3 в понедельник':'Top-3 prizes on Monday','До конца недели':'Until the week ends','Вы пока не в рейтинге — зарабатывайте опыт!':'You are not ranked yet — earn some XP!','Неделя только началась — станьте первым!':'The week has just started — be the first!','🤝 Сегодня уже помогли':'🤝 Already helped today','Нет связи с сервером':'No connection to the server','Загрузка…':'Loading…'});
+Object.assign(EN,{'Ваш прогресс обнулён администратором':'Your progress was reset by an administrator','Причина:':'Reason:','Понятно, начать заново':'Got it, start over','Объявление':'Announcement','Понятно':'Got it'});
 Object.assign(EN,{'Поле':'Field','Двор':'Yard','Загон':'Paddock','Деревце':'Tree','Куст':'Bush','Стог сена':'Hay bale','Ящик':'Crate','Бочка':'Barrel','Валун':'Boulder','⇄ Поменять':'⇄ Swap','↺ На место':'↺ Reset','🗑 Убрать':'🗑 Remove','↺ Всё на место':'↺ Reset all','Нажмите на предмет, с которым поменять местами.':'Tap the item to swap with.','Нажмите на предмет, с которым поменять':'Tap the item to swap with','Нажмите на свободное место — переедет туда. Или «Поменять» и выберите, с чем.':'Tap an empty spot to move it there. Or press “Swap” and choose with what.','Не помещается — освободите место':'Does not fit — free up some space','⇄ Поменяли местами':'⇄ Swapped','🗑 Убрано. «Всё на место» вернёт':'🗑 Removed. “Reset all” brings it back','Родное место занято':'Original spot is taken','↺ Вернули на место':'↺ Put back','Всё уже на местах':'Everything is already in place','↺ Всё на своих местах':'↺ Everything is back in place','Нажмите на любой предмет — поле, амбар, озеро, деревья — потом на свободное место: он переедет туда. «Поменять» меняет два предмета местами.':'Tap any item — field, barn, lake, trees — then an empty spot to move it there. “Swap” exchanges two items.'});
 
 function T(s){if(LANG!=='en'||typeof s!=='string'||!/[А-Яа-яЁё]/.test(s))return s;var c=TC[s];if(c!==undefined)return c;var r=s;PAT.forEach(function(p){r=r.replace(p[0],p[1])});
