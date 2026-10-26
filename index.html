@@ -245,12 +245,15 @@ var P=[{id:'egg',n:'Яйцо',e:'🥚',sell:8,lvl:1},{id:'milk',n:'Молоко'
 var byId=function(id){return C.concat(P).filter(function(c){return c.id===id})[0]};
 function fresh(){return{coins:30,xp:0,inv:{},plots:[null,null,null,null,null,null,null,null,null],unlocked:4,cap:20,orders:[],sel:'wheat'}}
 function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){S=null}if(!S||!S.plots)S=fresh();
+if(S.sg&&S.sg!==sigOf())S.tm=1;
 var D={streak:0,claimed:'',qd:'',quests:[],chest:0,pen:[Date.now(),0,0],st:0,sp:0,tip:0,oven:null,ac:{},ag:{},seen:{},cc:0,fair:null,inv_d:'',fert:0,pet:0,dog:0,dec:{},wheel:'',ts:0,since:Date.now(),name:'',fname:'',mat:{},shop:[null,null,null,null],uid:'',xv:0,bx:null,vip:0,bpx:0,bpp:0,bpg:[],gd:[],wd:['farm'],wl:'farm',ch:{c:0,r:0,l:0},obj:[],ld:0};
 for(var k in D)if(S[k]===undefined)S[k]=D[k];
 if(S.xv!==2){S.xp=Math.round(S.xp*LVX/8);S.xv=2}
 if(!S.uid){var u0=tg()&&tg().initDataUnsafe&&tg().initDataUnsafe.user;S.uid=(u0&&u0.id)||('u'+Math.random().toString(36).slice(2,10))}
 S.obj=(S.obj||[]).filter(function(o){return o&&OBJ_BY[o.k]});S.bl=blClean(S.bl);S.pp=ppClean(S.pp);setMH();while(S.orders.length<3)S.orders.push(mkOrder());daily()}
-function save(){S.ts=Date.now();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}cloudSave()}
+function cyrb(s){var h1=0xdeadbeef,h2=0x41c6ce57,i,ch;for(i=0;i<s.length;i++){ch=s.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677)}h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);return(4294967296*(2097151&h2)+(h1>>>0)).toString(36)}
+function sigOf(){return cyrb([S.xp,S.coins,S.uid,S.ts,'mf~k7'].join('|'))}
+function save(){S.ts=Date.now();S.sg=sigOf();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}cloudSave()}
 var LVX=32;/* опыта на уровень: чем больше число, тем медленнее растут уровни */
 function lvl(){return Math.floor(Math.sqrt(S.xp/LVX))+1}
 function used(){var n=0;for(var k in S.inv)n+=S.inv[k];return n}
@@ -392,7 +395,7 @@ function rows(){
 function rk(){var a=rows();for(var i=0;i<a.length;i++)if(a[i].me)return i+1;return a.length}
 function topLoad(){
   if(!API)return;
-  try{fetch(API+'/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:String(S.uid),name:myName(),xp:S.xp,lvl:lvl()})}).then(function(){return fetch(API+'/top')}).then(function(r){return r.json()}).then(function(a){if(a&&a.length){TOP=a;if(tab==='top')paint()}}).catch(function(){})}catch(e){}
+  try{fetch(API+'/top').then(function(r){return r.json()}).then(function(a){if(a&&a.length){TOP=a;if(tab==='top')paint()}}).catch(function(){})}catch(e){}
 }
 function viewTop(){
   var a=rows(),mi=0,h='<h2>Рейтинг ферм</h2>'+'';
@@ -1845,7 +1848,7 @@ function mkSnap(){
   return{w:wid(),ld:S.ld||0,u:S.unlocked,pl:pl,o:S.obj.map(function(o){return[o.k,o.x,o.y,(o.f||[]).length,o.s||'',o.m?1:0]}),sk:skClean(S.sk),bl:(S.bl&&Object.keys(S.bl).length?blClean(S.bl):undefined),pt:((S.pp&&S.pp.act)||[]).map(petOf).filter(Boolean).map(function(p){return[p.pid,p.lv,p.fed>Date.now()?1:0]}),l:((S.lake&&S.lake.f)||[]).length,pn:S.pen.map(function(t){return t?1:0}),pet:S.pet?1:0,dog:S.dog?1:0,fn:S.fname||''}}
 function snapPost(){
   if(!API||!S)return;var tg=window.Telegram&&Telegram.WebApp;if(!tg||!tg.initData)return;
-  api('/snap',{name:S.fname||myName(),lvl:lvl(),xp:S.xp,coins:S.coins,snap:mkSnap()}).catch(function(){})}
+  api('/snap',{name:S.fname||myName(),lvl:lvl(),xp:S.xp,coins:S.coins,tm:S.tm?1:0,snap:mkSnap()}).catch(function(){})}
 
 
 /* ===== ДОНАТ ЗА ⭐: сундуки, множители, VIP, пропуск ===== */
