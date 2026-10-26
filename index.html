@@ -1040,6 +1040,14 @@ function showAnn(a){if(document.getElementById('annov')||(S.rst&&!S.rst.ok))retu
  o.querySelector('#annok').onclick=function(){S.annId=a.id;save();o.remove()}}
 var _claimPaid0=claimPaid;claimPaid=function(){_claimPaid0();try{annCheck()}catch(e){}};
 setTimeout(showReset,900);
+/* ===== БАН ИГРОКА ===== */
+function banShow(b){var o=admOverlay('banov','<div style="background:var(--panel);border:4px solid #d9442b;box-shadow:0 0 30px #d9442b;padding:18px;width:100%;max-width:340px;text-align:center"><div style="font-size:34px">🚫</div><b style="display:block;margin:6px 0 10px;font-size:14px">Ваш аккаунт заблокирован</b><div class="r" style="margin-bottom:6px">Причина:</div><div style="background:rgba(0,0,0,.08);padding:12px;margin-bottom:12px;font-size:12px;line-height:1.4;white-space:pre-wrap;word-break:break-word">'+String(b.r||'Нарушение правил игры').replace(/[<>&]/g,'')+'</div><div class="r">Если вы считаете, что это ошибка — напишите администратору бота.</div></div>');
+ o.style.zIndex=99999}
+function banApply(b){if(b){S.bn={r:b.r};try{save()}catch(e){}banShow(b)}else{if(S.bn){delete S.bn;try{save()}catch(e){}}var o=document.getElementById('banov');if(o){o.remove();paint()}}}
+var BANT=0;
+function banCheck(){if(!API||!S)return;api('/claim',{op:'ban'}).then(function(j){if(j&&j.ok)banApply(j.ban||null)}).catch(function(){})}
+setTimeout(function(){if(S&&S.bn)banShow(S.bn);banCheck()},1100);
+setInterval(banCheck,45000);
 /* ===== ПИТОМЦЫ: кейсы с яйцами, инкубатор, уход, бонусы ===== */
 var RAR=[{n:'Обычный',c:'#9fb4cc',b:.02,t:600},{n:'Необычный',c:'#5fd05a',b:.03,t:1800},{n:'Редкий',c:'#4aa8ff',b:.05,t:7200},{n:'Эпический',c:'#c05cff',b:.08,t:21600},{n:'Легендарный',c:'#ffb52e',b:.12,t:43200}];
 var BNM={coins:'монет',xp:'опыта',speed:'роста'};
