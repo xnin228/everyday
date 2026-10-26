@@ -449,6 +449,17 @@ def price(sku):
         pass
     return None
 
+def led_add(d, uid, sku):
+    """Журнал того, что сервер выдал игроку: сундуки по видам и удобрение. Нужен для проверки, что на руках не больше выданного."""
+    try:
+        p = str(sku).split("_"); L = d.setdefault("led", {}).setdefault(str(uid), {})
+        if p[0] == "chest" and p[1] in ("c", "r", "l"): L[p[1]] = L.get(p[1], 0) + 1
+        elif sku.startswith("adm_fert_"):
+            n = int(sku[9:])
+            if n > 0: L["fe"] = L.get("fe", 0) + n
+    except Exception:
+        pass
+
 def _load():
     try:
         with open(FILE, encoding="utf-8") as f: return json.load(f)
@@ -535,6 +546,7 @@ def install(bot, token):
             d["paid"].append(sp.telegram_payment_charge_id)
             gid = uuid.uuid4().hex[:12]
             d["grants"].setdefault(uid, []).append({"id": gid, "sku": sku})
+            led_add(d, uid, sku)
             d.setdefault("hist", []).append({"uid": uid, "sku": sku, "gid": gid, "amt": sp.total_amount, "t": int(time.time()), "got": 0})
             d["hist"] = d["hist"][-500:]
             # партнёрка: пригласивший получает % от покупки (в монетах игры)
@@ -639,7 +651,7 @@ class H(BaseHTTPRequestHandler):
             if self.path == "/snap":
                 uid = payments.user_id(body.get("initData", ""))
                 if not uid: return self._send(200, {"ok": False})
-                ok = admin.record_snapshot(uid, body.get("name"), body.get("lvl"), body.get("xp"), body.get("coins"), body.get("snap"), 1 if body.get("tm") else 0, {"ch": body.get("ch"), "fe": body.get("fe")})
+                ok = admin.record_snapshot(uid, body.get("name"), body.get("lvl"), body.get("xp"), body.get("coins"), body.get("snap"), 1 if body.get("tm") else 0, {"ch": body.get("ch"), "fe": body.get("fe"), "cd": body.get("cd")})
                 return self._send(200, {"ok": bool(ok)})
         except Exception as e:
             admin.notify("err", "❗ Ошибка сервера <code>%s</code>: %s" % (self.path, str(e)[:150]), key=self.path + str(e)[:40], every=600)
@@ -740,6 +752,19 @@ def _suspicious(old, xp, lvl, coins, now, tm, ex=None):
         return None
     if tm: return "изменено сохранение на телефоне (подпись не совпала)"
     ex = ex or {}
+    cd = ex.get("cd"); led = ex.get("led") or {}; lb = old.get("lb")
+    if isinstance(cd, dict) and lb:
+        lt = old.get("lt") or {}
+        for t, bp, nm in (("c", 0, "обычных"), ("r", 3, "редких"), ("l", 1, "легендарных")):
+            hand = int(cd.get(t) or 0)
+            allow = int(lb.get(t, 0)) + max(0, int(led.get(t, 0)) - int(lt.get(t, 0))) + bp
+            if hand > allow:
+                return "сундуков (%s) на руках %d, а выдано/заработано не больше %d" % (nm, hand, allow)
+    if lb and ex.get("fe") is not None:
+        hrs = max(0.0, (now - old.get("lbt", now)) / 3600.0)
+        allow = int(old.get("fb", 0)) + 600 + int(400 * hrs) + max(0, int(led.get("fe", 0)) - int((old.get("lt") or {}).get("fe", 0)))
+        if int(ex.get("fe") or 0) > allow:
+            return "удобрение выросло быстрее возможного: %s при допустимых ~%d" % (ex.get("fe"), allow)
     if int(ex.get("ch") or 0) > 100: return "сундуков на руках: %s (нереально много)" % ex.get("ch")
     if int(ex.get("fe") or 0) > 20000: return "удобрения на руках: %s (нереально много)" % ex.get("fe")
     if xp >= XP_ABS_MAX: return "опыт %d выше возможного" % xp
@@ -799,6 +824,7 @@ def record_snapshot(uid, name, lvl, xp, coins, snap, tm=0, ex=None):
         old = d.get(str(uid)) or {}
         nxp = max(0, min(10 ** 9, int(xp or 0)))
         ncoins = max(0, min(10 ** 12, int(coins or 0)))
+        ex = dict(ex or {}); ex["led"] = (P._load().get("led") or {}).get(str(uid)) or {}
         why = _suspicious(old, nxp, lvl, ncoins, now, 1 if tm else 0, ex)
         if why:
             # цифры не принимаем: оставляем старые данные, помечаем игрока
@@ -818,8 +844,13 @@ def record_snapshot(uid, name, lvl, xp, coins, snap, tm=0, ex=None):
             "seen": int(now),
             "snap": snap,
         }
-        for _k in ("flag", "trust", "tu", "fa"):
+        for _k in ("flag", "trust", "tu", "fa", "lb", "lt", "lbt", "fb"):
             if _k in old: rec[_k] = old[_k]
+        _cd = ex.get("cd")
+        if "lb" not in rec and isinstance(_cd, dict) and ex.get("fe") is not None:
+            # точка отсчёта: что у игрока на руках сейчас (уже проверено выше), дальше растёт только по журналу
+            rec["lb"] = {t: max(0, int(_cd.get(t) or 0)) for t in ("c", "r", "l")}
+            rec["lt"] = dict(ex["led"]); rec["lbt"] = int(now); rec["fb"] = max(0, int(ex.get("fe") or 0))
         if old.get("wk") == wk:
             rec["wk"], rec["wb"] = wk, min(old.get("wb", nxp), nxp)
             if "pwk" in old:
@@ -1042,12 +1073,25 @@ def mail_api(body, bot=None):
         if q.get("d") != today: q = {"d": today, "n": 0}
         if q["n"] >= MAIL_DAY_LIMIT:
             return {"ok": False, "err": "Лимит: %d подарков в сутки" % MAIL_DAY_LIMIT}
+        sp = _pload().get(uid)
+        if not sp:
+            return {"ok": False, "err": "Откройте ферму и подождите минуту — потом можно дарить"}
+        now_ = time.time()
+        if kind == "coins":
+            # монеты у отправителя сервер не списывает, поэтому сверяем с его последними данными
+            since = sum(x[1] for x in (q.get("l") or []) if x[0] >= sp.get("seen", 0))
+            if n + since > int(sp.get("coins", 0)) + 500: return {"ok": False, "err": "Не хватает монет"}
+            q["l"] = ((q.get("l") or []) + [[now_, n]])[-20:]
+        elif kind == "item":
+            if q.get("i", 0) + n > 60: return {"ok": False, "err": "Лимит предметов в подарках: 60 в сутки"}
+            q["i"] = q.get("i", 0) + n
         rbox = box.get(rid, [])
         if len(rbox) >= MAIL_BOX_MAX: return {"ok": False, "err": "У получателя переполнен ящик"}
         pd = _pload()
         fn = _mclean(body.get("fn"), 16) or _mclean((pd.get(uid) or {}).get("name"), 16) or "Друг"
         g = {"id": uuid.uuid4().hex[:12], "fn": fn, "kind": kind, "k": k, "n": n, "msg": _mclean(body.get("msg"), 40), "t": int(time.time())}
         rbox.append(g); box[rid] = rbox
+        if kind == "fert": d.setdefault("led", {}).setdefault(rid, {})["fe"] = d["led"][rid].get("fe", 0) + n
         q["n"] += 1; d["mailq"][uid] = q
         P._save(d)
         notify = (rid, fn)
@@ -1123,6 +1167,7 @@ def queue(uid, grant):
     with P._Lock():
         d = P._load()
         d["grants"].setdefault(str(uid), []).append({"id": uuid.uuid4().hex[:12], "sku": grant})
+        P.led_add(d, uid, grant)
         P._save(d)
 
 
@@ -1298,6 +1343,7 @@ def reset_player(admin_id, uid, reason):
         if v:
             v.update({"xp": 0, "lvl": 1, "coins": 0, "wb": 0}); v.pop("flag", None)
             v.pop("pwk", None); v.pop("pg", None)
+            for _k in ("lb", "lt", "lbt", "fb"): v.pop(_k, None)
             _psave(pl)
     try: score_drop(uid)
     except Exception: pass
