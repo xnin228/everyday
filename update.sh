@@ -610,6 +610,14 @@ class H(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(n) or b"{}")
         except Exception: return self._send(400, {"error": "bad json"})
         try:
+            _u0 = payments.user_id(body.get("initData", "")) if isinstance(body, dict) else None
+            if _u0:
+                _b = admin.ban_get(_u0)
+                if body.get("op") == "ban":
+                    return self._send(200, {"ok": True, "ban": _b})
+                if _b: return self._send(200, {"ok": False, "err": "ban", "ban": _b})
+            elif body.get("op") == "ban":
+                return self._send(200, {"ok": False})
             if self.path == "/invoice": return self._send(200, payments.api_invoice(bot, body))
             if self.path == "/claim":
                 if body.get("op") in ("box", "send", "ack"): return self._send(200, admin.mail_api(body, bot))
@@ -1178,6 +1186,41 @@ def hide_set(uid, on):
     _dsave(d)
 
 
+_BC = {"m": -1, "v": {}}
+
+
+def bans():
+    """Список банов {uid: {r, t}} из data.json (с кэшем по времени изменения файла)."""
+    try: m = os.path.getmtime(DFILE)
+    except Exception: return {}
+    if m != _BC["m"]:
+        _BC["v"] = _dload().get("bans") or {}; _BC["m"] = m
+    return _BC["v"]
+
+
+def ban_get(uid):
+    return bans().get(str(uid))
+
+
+def ban_set(admin_id, uid, reason):
+    uid = str(uid); reason = _mclean(reason, 300) or "Нарушение правил игры"
+    d = _dload(); b = d.get("bans") or {}
+    b[uid] = {"r": reason, "t": int(time.time())}; d["bans"] = b
+    (d.get("scores") or {}).pop(uid, None)
+    _dsave(d); _BC["m"] = -1
+    hide_set(uid, True)
+    log(admin_id, uid, "BAN: " + reason)
+
+
+def unban(admin_id, uid):
+    uid = str(uid); d = _dload(); b = d.get("bans") or {}
+    ok = b.pop(uid, None) is not None; d["bans"] = b
+    _dsave(d); _BC["m"] = -1
+    hide_set(uid, False)
+    log(admin_id, uid, "UNBAN")
+    return ok
+
+
 def reset_player(admin_id, uid, reason):
     """Обнуляет прогресс игрока: в очередь ставится выдача adm_reset с причиной (игра покажет её на экране)."""
     uid = str(uid); reason = _mclean(reason, 300) or "Решение администрации"
@@ -1308,6 +1351,7 @@ def install(bot):
             "\n<b>Объявления и сброс</b>\n"
             "/announce &lt;текст&gt; — объявление всем, кто активировал бота (в личку + окно в игре), с подтверждением\n"
             "/flags — кого пометила защита от накрутки (кнопки: оставить / обнулить / спрятать)\n"
+            "/ban &lt;игрок&gt; &lt;причина&gt; — ЗАБАНИТЬ (игра блокируется, причина на экране), /unban &lt;игрок&gt;, /bans — список\n"
             "/hide &lt;игрок&gt; — спрятать из рейтингов и списка ферм (читеры), /unhide — вернуть\n"
             "/reset &lt;игрок&gt; &lt;причина&gt; — ОБНУЛИТЬ прогресс игрока; причина покажется у него на экране (с подтверждением)\n\n"
             "&lt;игрок&gt; — Telegram id или часть имени.\n"
@@ -1342,7 +1386,7 @@ def install(bot):
             [("🧪 +10", "adm:g:%s:fert:10" % u), ("📦", "adm:g:%s:chest_c" % u), ("💎", "adm:g:%s:chest_r" % u), ("👑", "adm:g:%s:chest_l" % u)],
             [("👑 VIP 30д", "adm:g:%s:vip" % u), ("🎫 Пропуск", "adm:g:%s:bp" % u)],
             [("⚡×2 1д", "adm:g:%s:bx_2_1" % u), ("⚡×5 1д", "adm:g:%s:bx_5_1" % u), ("⚡×10 1д", "adm:g:%s:bx_10_1" % u)],
-            [("🗑 Обнулить прогресс", "adm:rs:%s" % u)],
+            [("🗑 Обнулить прогресс", "adm:rs:%s" % u), ("🚫 Забанить", "adm:bn:%s" % u)],
             [("⬅ К списку", "adm:l:0"), ("🔄", "adm:p:%s" % u)]])
         return t, k
 
@@ -1500,6 +1544,47 @@ def install(bot):
         bot.send_message(m.chat.id, t, parse_mode="HTML",
                          reply_markup=kb([[(_clean(v.get("name"), 18), "adm:p:" + u)] for u, v in fl[:8]]) if fl else None)
 
+    def ask_ban(chat, uid, reason):
+        v = _pload().get(str(uid)) or {}
+        ask(chat, "ban", (str(uid), reason),
+            "🚫 <b>Забанить игрока?</b>\nИгрок: <b>%s</b> (<code>%s</code>), ур. %s\nПричина на экране игрока:\n<i>%s</i>\n\nИгра у него заблокируется, платежи и почта тоже. Снять бан: /unban." % (
+                v.get("name", "?"), uid, v.get("lvl", "?"), _mclean(reason, 300)))
+
+    @bot.message_handler(commands=["ban"])
+    def _ban(m):
+        if not is_admin(m.from_user.id): return
+        q = (m.text or "").split(None, 2)
+        if len(q) < 3:
+            return bot.reply_to(m, "Пример: /ban 123456789 Накрутка через изменение сохранения\nПричина обязательна — игрок увидит её на экране.")
+        uid, rec = resolve(q[1])
+        if not uid: return bot.reply_to(m, "Игрок не найден или найдено несколько. Используйте /find.")
+        if is_admin(int(uid)) if str(uid).isdigit() else False: return bot.reply_to(m, "Админа банить нельзя.")
+        ask_ban(m.chat.id, uid, q[2])
+
+    @bot.message_handler(commands=["unban"])
+    def _unban(m):
+        if not is_admin(m.from_user.id): return
+        q = (m.text or "").split(None, 1)
+        if len(q) < 2: return bot.reply_to(m, "Пример: /unban 123456789")
+        uid, rec = resolve(q[1])
+        if not uid: uid = q[1].strip()
+        if unban(m.from_user.id, uid):
+            bot.reply_to(m, "✅ Бан снят. Игра разблокируется у игрока при следующей проверке (до минуты).")
+            try: bot.send_message(int(uid), "✅ Блокировка в «Мини-ферме» снята.")
+            except Exception: pass
+        else:
+            bot.reply_to(m, "Этот игрок не в бане.")
+
+    @bot.message_handler(commands=["bans"])
+    def _bans(m):
+        if not is_admin(m.from_user.id): return
+        b = bans()
+        if not b: return bot.reply_to(m, "Банов нет.")
+        pl = _pload(); rows = []
+        for u, x in sorted(b.items(), key=lambda kv: kv[1].get("t", 0), reverse=True)[:40]:
+            rows.append("🚫 <b>%s</b> <code>%s</code>\n   %s" % ((pl.get(u) or {}).get("name", "?"), u, _mclean(x.get("r", ""), 120)))
+        bot.send_message(m.chat.id, "<b>Баны (%d)</b>\n\n%s\n\nСнять: /unban id" % (len(b), "\n".join(rows)), parse_mode="HTML")
+
     @bot.message_handler(commands=["cancel"])
     def _cancel(m):
         if not is_admin(m.from_user.id): return
@@ -1535,6 +1620,16 @@ def install(bot):
                 ask_reset(mm.chat.id, uid, mm.text.strip()[:300])
             bot.register_next_step_handler(msg, _got)
             return
+        elif act == "bn":
+            bot.answer_callback_query(c.id)
+            v = _pload().get(str(rest)) or {}
+            msg = bot.send_message(chat, "🚫 Бан игрока <b>%s</b>. Напишите причину одним сообщением (покажется у игрока на экране) или /cancel." % v.get("name", rest), parse_mode="HTML")
+            def _gotb(mm, uid=str(rest)):
+                if not is_admin(mm.from_user.id) or not (mm.text or "").strip() or mm.text.startswith("/"):
+                    return bot.send_message(mm.chat.id, "Отменено.")
+                ask_ban(mm.chat.id, uid, mm.text.strip()[:300])
+            bot.register_next_step_handler(msg, _gotb)
+            return
         elif act in ("fk", "fr", "fh"):
             uid_ = str(rest)
             if act == "fk":
@@ -1568,6 +1663,11 @@ def install(bot):
                 try: bot.send_message(int(pl[0]), "⚠️ Ваш прогресс в «Мини-ферме» обнулён.\nПричина: %s" % pl[1])
                 except Exception: pass
                 show("✅ Прогресс игрока обнулён. Он увидит причину при открытии игры.")
+            elif kind == "ban":
+                ban_set(c.from_user.id, pl[0], pl[1])
+                try: bot.send_message(int(pl[0]), "🚫 Ваш аккаунт в «Мини-ферме» заблокирован.\nПричина: %s" % pl[1])
+                except Exception: pass
+                show("🚫 Игрок забанен. Игра заблокируется у него при следующей проверке (до минуты). Снять: /unban %s" % pl[0])
             elif kind == "ann":
                 announce(bot, c.from_user.id, pl, chat)
                 show("📢 Рассылка запущена, отчёт придёт сообщением.")
@@ -1586,7 +1686,7 @@ def install(bot):
         broadcast.install(bot)          # рассылка-приглашение: свои 4 обработчика (запись, /stop, /resume, /bc)
     except Exception as e:
         print("broadcast не подключён:", e, flush=True)
-    first("message_handlers", 16)
+    first("message_handlers", 20)
     first("callback_query_handlers", 1)
 UPDEOF
 cat > "$APP_DIR/broadcast.py.new" <<'UPDEOF'
