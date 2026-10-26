@@ -116,7 +116,8 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"now": int(time.time() * 1000), "event": active_event(), "events": active_events(), "weather": weather_now()})
         if p == "/top":
             with LK:
-                sc = load()["scores"]
+                dd = load(); sc = dd["scores"]; hid_ = set(str(x) for x in (dd.get("hidden") or []))
+            sc = {k: v for k, v in sc.items() if k not in hid_ and v.get("xp", 0) < 10 ** 9}
             rows = sorted(sc.items(), key=lambda kv: kv[1].get("xp", 0), reverse=True)[:50]
             return self._send(200, [{"id": k, "name": v.get("name", "Фермер"), "xp": v.get("xp", 0)} for k, v in rows])
         self._send(404, {"error": "not found"})
@@ -135,6 +136,8 @@ class H(BaseHTTPRequestHandler):
             xp = max(0, min(10 ** 9, int(b.get("xp") or 0)))
             with LK:
                 d = load()
+                if i in set(str(x) for x in (d.get("hidden") or [])) or xp >= 10 ** 9:
+                    return self._send(200, {"ok": True})
                 d["scores"][i] = {"name": clean(b.get("name")) or "Фермер", "xp": xp, "lvl": int(b.get("lvl") or 1), "t": int(time.time())}
                 save(d)
             self._send(200, {"ok": True})
@@ -743,7 +746,8 @@ def _week_gain(v, w):
 def top_week(uid):
     """Недельный рейтинг: прирост опыта с понедельника."""
     w = week_id(); d = _pload()
-    rows = [(u, _week_gain(v, w), v) for u, v in d.items()]
+    hd = hidden_ids()
+    rows = [(u, _week_gain(v, w), v) for u, v in d.items() if u not in hd]
     rows = [r for r in rows if r[1] > 0]
     rows.sort(key=lambda r: r[1], reverse=True)
     out = [{"id": hid(u), "name": v.get("name", "Фермер"), "lvl": v.get("lvl", 1), "gain": g,
@@ -764,7 +768,8 @@ def week_tick(bot=None):
                 dd["wkaward"] = w; P._save(dd)
             return
         pl = _pload()
-        rows = sorted([(u, _week_gain(v, last)) for u, v in pl.items()], key=lambda r: r[1], reverse=True)
+        hd = hidden_ids()
+        rows = sorted([(u, _week_gain(v, last)) for u, v in pl.items() if u not in hd], key=lambda r: r[1], reverse=True)
         rows = [r for r in rows if r[1] > 0][:3]
         for i, (u, g) in enumerate(rows):
             c, egg, et = WEEK_PRIZES[i]
@@ -785,7 +790,8 @@ def week_tick(bot=None):
 def farms_list(limit=50):
     d = _pload()
     cutoff = time.time() - 60 * 86400
-    rows = [(u, v) for u, v in d.items() if v.get("seen", 0) > cutoff]
+    hd = hidden_ids()
+    rows = [(u, v) for u, v in d.items() if v.get("seen", 0) > cutoff and u not in hd]
     rows.sort(key=lambda r: r[1].get("xp", 0), reverse=True)
     t = time.time() - ONLINE_SEC
     return [{"id": hid(u), "name": v.get("name", "Фермер"), "lvl": v.get("lvl", 1),
@@ -1035,6 +1041,42 @@ def describe(grant):
 
 
 # ---------- бот ----------
+DFILE = os.path.join(HERE, "data.json")
+
+
+def _dload():
+    try:
+        with open(DFILE, encoding="utf-8") as f: return json.load(f)
+    except Exception:
+        return {}
+
+
+def _dsave(d):
+    tmp = DFILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f: json.dump(d, f, ensure_ascii=False)
+    os.replace(tmp, DFILE)
+
+
+def hidden_ids():
+    return set(str(x) for x in (_dload().get("hidden") or []))
+
+
+def score_drop(uid):
+    """Убирает игрока из общего рейтинга (data.json)."""
+    d = _dload(); sc = d.get("scores") or {}
+    n = 1 if sc.pop(str(uid), None) is not None else 0
+    d["scores"] = sc; _dsave(d)
+    return n
+
+
+def hide_set(uid, on):
+    """Прячет игрока из рейтингов, списка ферм и недельного топа (для читеров). Игра для него не блокируется."""
+    d = _dload(); h = set(str(x) for x in (d.get("hidden") or []))
+    (h.add if on else h.discard)(str(uid)); d["hidden"] = sorted(h)
+    if on: (d.get("scores") or {}).pop(str(uid), None)
+    _dsave(d)
+
+
 def reset_player(admin_id, uid, reason):
     """Обнуляет прогресс игрока: в очередь ставится выдача adm_reset с причиной (игра покажет её на экране)."""
     uid = str(uid); reason = _mclean(reason, 300) or "Решение администрации"
@@ -1049,6 +1091,8 @@ def reset_player(admin_id, uid, reason):
             v.update({"xp": 0, "lvl": 1, "coins": 0, "wb": 0})
             v.pop("pwk", None); v.pop("pg", None)
             _psave(pl)
+    try: score_drop(uid)
+    except Exception: pass
     log(admin_id, uid, "RESET: " + reason)
     return gid
 
@@ -1162,6 +1206,7 @@ def install(bot):
             "/stop /resume — рассылка-приглашение, /bc — разослать сейчас\n"
             "\n<b>Объявления и сброс</b>\n"
             "/announce &lt;текст&gt; — объявление всем, кто активировал бота (в личку + окно в игре), с подтверждением\n"
+            "/hide &lt;игрок&gt; — спрятать из рейтингов и списка ферм (читеры), /unhide — вернуть\n"
             "/reset &lt;игрок&gt; &lt;причина&gt; — ОБНУЛИТЬ прогресс игрока; причина покажется у него на экране (с подтверждением)\n\n"
             "&lt;игрок&gt; — Telegram id или часть имени.\n"
             "Выдача придёт игроку при открытии игры (в течение ~25 секунд, если игра открыта).")
@@ -1326,6 +1371,21 @@ def install(bot):
             n = 0
         ask(m.chat.id, "ann", q[1].strip()[:700], "📢 <b>Отправить объявление %d получателям?</b>\n\n%s" % (n, _mclean(q[1], 700)))
 
+    def hide_cmd(m, on):
+        if not is_admin(m.from_user.id): return
+        q = (m.text or "").split(None, 1)
+        if len(q) < 2: return bot.reply_to(m, "Пример: /%s 123456789 (id или часть имени)" % ("hide" if on else "unhide"))
+        uid, rec = resolve(q[1])
+        if not uid: return bot.reply_to(m, "Игрок не найден или найдено несколько. Используйте /find.")
+        hide_set(uid, on)
+        bot.reply_to(m, ("🙈 %s спрятан из рейтингов и списка ферм." if on else "👁 %s снова виден в рейтингах.") % ((rec or {}).get("name") or uid))
+
+    @bot.message_handler(commands=["hide"])
+    def _hide(m): hide_cmd(m, True)
+
+    @bot.message_handler(commands=["unhide"])
+    def _unhide(m): hide_cmd(m, False)
+
     @bot.message_handler(commands=["cancel"])
     def _cancel(m):
         if not is_admin(m.from_user.id): return
@@ -1391,7 +1451,7 @@ def install(bot):
         broadcast.install(bot)          # рассылка-приглашение: свои 4 обработчика (запись, /stop, /resume, /bc)
     except Exception as e:
         print("broadcast не подключён:", e, flush=True)
-    first("message_handlers", 13)
+    first("message_handlers", 15)
     first("callback_query_handlers", 1)
 UPDEOF
 cat > "$APP_DIR/broadcast.py.new" <<'UPDEOF'
