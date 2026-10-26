@@ -1330,6 +1330,49 @@ def _nm(uid):
     return "<b>%s</b> (<code>%s</code>)" % (_clean(v.get("name"), 24) or "?", uid)
 
 
+def audit_text():
+    """Сверка платежей: что куплено, что доставлено, где есть расхождения."""
+    d = P._load(); hist = d.get("hist") or []; now = time.time()
+    pl = _pload(); bad = []
+    def seg(sec):
+        r = [h for h in hist if now - h.get("t", 0) < sec]
+        return len(r), sum(h.get("amt", 0) for h in r), len(set(h.get("uid") for h in r))
+    n1, s1, u1 = seg(86400); n7, s7, u7 = seg(7 * 86400); na, sa, ua = seg(10 ** 10)
+    by = {}
+    for h in hist:
+        if now - h.get("t", 0) < 7 * 86400:
+            by[h["sku"].split("_")[0]] = by.get(h["sku"].split("_")[0], 0) + 1
+    # не доставлено игроку дольше 15 минут
+    stuck = [h for h in hist if not h.get("got") and now - h.get("t", 0) > 900]
+    # сумма не совпала с ценой
+    wrong = [h for h in hist if P.price(h.get("sku", "")) is not None and P.price(h["sku"]) != h.get("amt")]
+    pend = sum(len(v) for v in (d.get("grants") or {}).values())
+    pend_u = len(d.get("grants") or {})
+    paidn = len(d.get("paid") or [])
+    led = d.get("led") or {}
+    led_ch = sum(sum(L.get(t, 0) for t in ("c", "r", "l")) for L in led.values())
+    flags = [(u, v) for u, v in pl.items() if v.get("flag")]
+    t = ["🧾 <b>Сверка платежей</b>",
+         "За сутки: %d покупок на %d ⭐ (%d игроков)" % (n1, s1, u1),
+         "За 7 дней: %d на %d ⭐ (%d игроков)" % (n7, s7, u7),
+         "В журнале: %d на %d ⭐ · счетов Telegram: %d" % (na, sa, paidn)]
+    if by: t.append("Типы за 7 дн.: " + ", ".join("%s ×%d" % kv for kv in sorted(by.items(), key=lambda kv: -kv[1])))
+    t.append("")
+    if stuck:
+        t.append("⚠️ <b>Оплачено, но не получено игроком (&gt;15 мин): %d</b>" % len(stuck))
+        for h in stuck[-8:]:
+            t.append("   %s — %s, %s ⭐, %s" % (_clean((pl.get(h["uid"]) or {}).get("name"), 16) or "?", h["sku"], h.get("amt"), time.strftime("%d.%m %H:%M", time.localtime(h.get("t", 0)))))
+        t.append("   Игрок получит при следующем заходе в игру. Если давно — напишите ему.")
+    else:
+        t.append("✅ Все оплаченные покупки доставлены игрокам")
+    t.append(("⚠️ Сумма не совпала с ценой: %d" % len(wrong)) if wrong else "✅ Суммы платежей совпадают с ценами")
+    t.append("📬 В очереди выдач: %d у %d игроков" % (pend, pend_u))
+    t.append("📦 Сундуков выдано сервером всего: %d" % led_ch)
+    t.append("🚨 Под флагом: %d" % len(flags) + (" (/flags)" if flags else ""))
+    t.append("🚫 В бане: %d" % len(bans()))
+    return "\n".join(t)
+
+
 def reset_player(admin_id, uid, reason):
     """Обнуляет прогресс игрока: в очередь ставится выдача adm_reset с причиной (игра покажет её на экране)."""
     uid = str(uid); reason = _mclean(reason, 300) or "Решение администрации"
@@ -1459,7 +1502,7 @@ def install(bot):
         return ("🛠 <b>Админ-панель «Мини-ферма»</b>\nВыберите раздел.",
                 kb([[("👥 Игроки", "adm:l:0"), ("📊 Статистика", "adm:s")],
                     [("📢 Объявление", "adm:an"), ("📜 Логи", "adm:lgm")],
-                    [("ℹ️ Команды", "adm:h")]]))
+                    [("🧾 Сверка платежей", "adm:au"), ("ℹ️ Команды", "adm:h")]]))
 
     def stats_text():
         d = _pload(); now = time.time()
@@ -1489,6 +1532,7 @@ def install(bot):
             "\n<b>Объявления и сброс</b>\n"
             "/announce &lt;текст&gt; — объявление всем, кто активировал бота (в личку + окно в игре), с подтверждением\n"
             "/flags — кого пометила защита от накрутки (кнопки: оставить / обнулить / спрятать)\n"
+            "/audit — сверка платежей: покупки, недоставленное, расхождения\n"
             "/logs — какие события присылать в личку · /journal [N] [вид] — последние события\n"
             "/ban &lt;игрок&gt; &lt;причина&gt; — ЗАБАНИТЬ (игра блокируется, причина на экране), /unban &lt;игрок&gt;, /bans — список\n"
             "/hide &lt;игрок&gt; — спрятать из рейтингов и списка ферм (читеры), /unhide — вернуть\n"
@@ -1756,6 +1800,11 @@ def install(bot):
         kind = next((x for x in q if x in [k for k, _t, _d in LOGKINDS]), None)
         bot.send_message(m.chat.id, journal_text(max(1, min(n, 60)), kind), parse_mode="HTML")
 
+    @bot.message_handler(commands=["audit"])
+    def _audit(m):
+        if not is_admin(m.from_user.id): return
+        bot.send_message(m.chat.id, audit_text(), parse_mode="HTML")
+
     @bot.message_handler(commands=["cancel"])
     def _cancel(m):
         if not is_admin(m.from_user.id): return
@@ -1799,6 +1848,8 @@ def install(bot):
                 cfg_[rest] = not cur_[rest]
             d_["logcfg"] = cfg_; _dsave(d_)
             show(*logs_menu()); bot.answer_callback_query(c.id); return
+        elif act == "au":
+            show(audit_text(), kb([[("🔄 Обновить", "adm:au"), ("⬅ Меню", "adm:m")]])); bot.answer_callback_query(c.id); return
         elif act == "lj":
             show(journal_text(25), kb([[("⬅ Назад", "adm:lgm")]])); bot.answer_callback_query(c.id); return
         elif act == "lgm":
@@ -1869,7 +1920,7 @@ def install(bot):
         broadcast.install(bot)          # рассылка-приглашение: свои 4 обработчика (запись, /stop, /resume, /bc)
     except Exception as e:
         print("broadcast не подключён:", e, flush=True)
-    first("message_handlers", 22)
+    first("message_handlers", 23)
     first("callback_query_handlers", 1)
 UPDEOF
 cat > "$APP_DIR/broadcast.py.new" <<'UPDEOF'
