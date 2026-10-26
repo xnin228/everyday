@@ -130,7 +130,7 @@ main{padding-bottom:120px}
 .wc .wp{width:96px;height:56px;image-rendering:pixelated;border:3px solid var(--ink);flex:none;background:#6cc24a}.wc.cur{background:#e4f4c8}
 .op{width:48px;height:48px;object-fit:contain;image-rendering:pixelated;flex:none;background:#8fd05a;border:3px solid var(--ink)}
 .sh{font-size:11px;margin:14px 0 8px}
-.bld{position:sticky;top:0;z-index:6;background:var(--panel);border:4px solid var(--ink);box-shadow:0 4px 0 var(--ink);padding:8px;margin-bottom:10px;font-size:10px}.bld .br{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}.bld .btn{flex:1}
+#bldw{position:sticky;top:0;z-index:8}.bld{background:var(--panel);border:4px solid var(--ink);box-shadow:0 4px 0 var(--ink);padding:8px;margin-bottom:10px;font-size:10px}.bld .br{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}.bld .btn{flex:1}
 .vis{display:flex;flex-direction:column;gap:2px;background:var(--panel);border:4px solid var(--ink);box-shadow:0 4px 0 var(--ink);padding:8px;margin-bottom:10px;font-size:10px}.vis span{font-size:8px}
 
 #pen{width:100%;height:auto;display:block;border:4px solid var(--ink);box-shadow:0 6px 0 var(--ink);image-rendering:pixelated;touch-action:manipulation;background:#6cc24a;margin-bottom:14px}
@@ -1500,7 +1500,7 @@ function mapClick(e){
   if(BLD&&BLD.mode==='place')return bldTap(x,y);
   i=objAt(x,y);
   if(EDIT&&edTap(x,y,i))return;
-  if(i>=0){BLD={mode:'sel',i:i};return bldUpdate()}
+  if(i>=0){var ok_=S.obj[i]&&S.obj[i].k;if(!EDIT&&ok_==='pond'){BLD={mode:'sel',i:i};return pondOpen(i)}if(!EDIT&&ok_==='mail'){BLD=null;tab='mail';return paint()}BLD={mode:'sel',i:i};return bldUpdate()}
   if(BLD){BLD=null;bldUpdate()}
   for(i=0;i<PEL.length;i++){q=PEL[i];if(Math.abs(x-q.x)<18&&y>q.y-(q.fly?60:44)&&y<q.y+6){tab='pets';return paint()}}
   L=bkOff('lake');if(Math.pow((x-72-L[0])/70,2)+Math.pow((y-552-L[1])/80,2)<1)return pondOpen(-2);
