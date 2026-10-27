@@ -1111,53 +1111,108 @@ def clan_emoji_map():
         return {}
 
 
-def _cview(d, uid, w):
-    pl = _pload(); hd = hidden_ids(); cl = d["clans"]; cid = d["clanof"].get(uid)
-    out = {"ok": True, "per": CLAN_GOAL_PER, "emo": CLAN_EMO, "max": CLAN_MAX,
-           "left": int((w + 1) * 604800 + 4 * 86400 - time.time()),
+CLAN_COST = 100000            # стоимость создания клана, монет
+CLAN_HELPERS = 3              # сколько помощников может быть у главы
+CLAN_REQ_TTL = 7 * 86400      # заявки живут неделю
+CLAN_JM = ("open", "req", "code")   # свободный вход · по заявке · только по коду (скрыт из поиска)
+
+
+def _cdesc(s):
+    s = re.sub(r"[<>&\"'`]", "", str(s or "")); return re.sub(r"\s+", " ", s).strip()[:60]
+
+
+def _crole(c, u):
+    return "o" if c["o"] == u else ("d" if u in (c.get("r") or {}) else "m")
+
+
+def _cjoin(d, uid, cid, w, me):
+    c = d["clans"][cid]
+    c["m"][uid] = {"j": int(time.time()), "jw": w, "jg": _week_gain(me, w)}
+    d["clanof"][uid] = cid
+    for x in d["clans"].values(): (x.get("req") or {}).pop(uid, None)
+
+
+def _cremove(d, c, cid, u):
+    c["m"].pop(u, None); (c.get("r") or {}).pop(u, None); d["clanof"].pop(u, None)
+    if not c["m"]: d["clans"].pop(cid, None); return
+    if c["o"] == u:
+        hs = [x for x in (c.get("r") or {}) if x in c["m"]]
+        pool = hs or list(c["m"])
+        c["o"] = min(pool, key=lambda x: (c.get("r") or {}).get(x, {}).get("t", c["m"][x].get("j", 0)) if hs else c["m"][x].get("j", 0))
+        (c.get("r") or {}).pop(c["o"], None)
+
+
+def _cinfo_row(k, c, pl, w, hd):
+    rows, total, goal = _cstat(c, pl, w, hd)
+    return {"id": k, "n": c["n"], "e": c["e"], "ds": c.get("ds", ""), "k": len(rows), "t": total,
+            "pct": int(100 * total / goal), "jm": c.get("jm", "code"), "full": 1 if len(rows) >= CLAN_MAX else 0}
+
+
+def _cview(d, uid, w, q=None):
+    pl = _pload(); hd = hidden_ids(); cl = d["clans"]; cid = d["clanof"].get(uid); now = time.time()
+    out = {"ok": True, "per": CLAN_GOAL_PER, "emo": CLAN_EMO, "max": CLAN_MAX, "cost": CLAN_COST, "helpers": CLAN_HELPERS,
+           "left": int((w + 1) * 604800 + 4 * 86400 - now),
            "tiers": [{"f": x[0], "c": x[1], "fe": x[2], "egg": 1 if x[3] else 0, "i": x[4]} for x in CLAN_TIERS], "minc": CLAN_MINC}
-    cd = d["clanl"].get(uid, 0) + CLAN_CD - time.time()
+    cd = d["clanl"].get(uid, 0) + CLAN_CD - now
     if cd > 0: out["cd"] = int(cd)
-    rank = []
-    for k, c in cl.items():
-        rows, total, goal = _cstat(c, pl, w, hd)
-        rank.append({"n": c["n"], "e": c["e"], "k": len(rows), "t": total, "pct": int(100 * total / goal), "me": 1 if k == cid else 0})
-    rank.sort(key=lambda r: (r["pct"], r["t"]), reverse=True)
-    out["rank"] = rank[:12]
+    allr = [dict(_cinfo_row(k, c, pl, w, hd), me=1 if k == cid else 0) for k, c in cl.items()]
+    allr.sort(key=lambda r: (r["pct"], r["t"]), reverse=True)
+    out["rank"] = allr[:12]
+    out["apps"] = [k for k, c in cl.items() if uid in (c.get("req") or {})]
+    if q is not None:
+        q = str(q).strip().lower()[:16]
+        f = [r for r in allr if r["jm"] != "code" and (not q or q in r["n"].lower())]
+        out["found"] = f[:20]
     if cid in cl:
         c = cl[cid]; rows, total, goal = _cstat(c, pl, w, hd)
-        rows.sort(key=lambda r: r[1], reverse=True)
-        out["clan"] = {"n": c["n"], "e": c["e"], "code": c["c"], "owner": 1 if c["o"] == uid else 0,
-                       "total": total, "goal": goal, "tier": _ctier(total, goal),
+        order = {"o": 0, "d": 1, "m": 2}
+        rows.sort(key=lambda r: (order[_crole(c, r[0])], -r[1]))
+        my = _crole(c, uid)
+        out["clan"] = {"n": c["n"], "e": c["e"], "code": c["c"], "ds": c.get("ds", ""), "jm": c.get("jm", "code"), "role": my,
+                       "owner": 1 if my == "o" else 0, "total": total, "goal": goal, "tier": _ctier(total, goal),
                        "members": [{"h": hid(u), "name": _clean(v.get("name"), 16) or "Фермер", "lvl": v.get("lvl", 1), "g": g,
-                                    "own": 1 if u == c["o"] else 0, "me": 1 if u == uid else 0} for u, g, v, m in rows]}
+                                    "r": _crole(c, u), "me": 1 if u == uid else 0} for u, g, v, m in rows]}
+        if my in ("o", "d"):
+            out["clan"]["reqs"] = [{"h": hid(u), "name": _clean((pl.get(u) or {}).get("name"), 16) or "Фермер", "lvl": (pl.get(u) or {}).get("lvl", 1)}
+                                   for u, x in (c.get("req") or {}).items() if now - x.get("t", 0) < CLAN_REQ_TTL and u not in d["clanof"]]
     return out
 
 
 def clan_api(body, bot=None):
-    """POST /clan. op: info · create{name,e} · join{code} · leave · kick{h} · newcode · disband."""
+    """POST /clan. op: info · search{q} · create{name,e,jm,ds} · join{code} · joinopen{id} · apply{id} · accept{h} · decline{h} ·
+    kick{h} · promote{h} · demote{h} · transfer{h} · set{jm,ds} · newcode · leave · disband."""
     uid = P.user_id(body.get("initData", ""))
     if not uid: return {"ok": False, "err": "auth"}
-    op = body.get("op"); w = week_id(); now = time.time(); err = None; ev = None
+    op = body.get("op"); w = week_id(); now = time.time(); err = None; ev = None; tell = []
     with P._Lock():
         d = P._load(); _cinit(d); cl = d["clans"]
         cid = d["clanof"].get(uid)
         if cid and cid not in cl: d["clanof"].pop(uid, None); cid = None
         c = cl.get(cid) if cid else None
         pl = _pload(); me = pl.get(uid) or {}
+        my = _crole(c, uid) if c else None
+
+        def tgt():
+            return next((u for u in c["m"] if hid(u) == str(body.get("h", ""))), None) if c else None
+
         if op == "create":
-            name = _cname(body.get("name")); e = str(body.get("e") or "")
+            name = _cname(body.get("name")); e = str(body.get("e") or ""); jm = body.get("jm") if body.get("jm") in CLAN_JM else "req"
             if c: err = "Вы уже в клане"
             elif d["clanl"].get(uid, 0) + CLAN_CD > now: err = "После выхода из клана нужно подождать до суток"
             elif len(name) < 2: err = "Название: от 2 до 16 символов"
             elif e not in CLAN_EMO: err = "Выберите значок клана"
             elif any(x["n"].lower() == name.lower() for x in cl.values()): err = "Такое название уже занято"
             elif len(cl) >= 500: err = "Слишком много кланов"
+            elif not me: err = "Откройте ферму и подождите минуту — потом можно создать клан"
+            elif int(me.get("coins", 0)) < CLAN_COST: err = "Нужно %d монет для создания клана" % CLAN_COST
             else:
                 cid = uuid.uuid4().hex[:8]
-                cl[cid] = {"n": name, "e": e, "o": uid, "c": _ccode(d), "t": int(now),
+                cl[cid] = {"n": name, "e": e, "o": uid, "c": _ccode(d), "t": int(now), "jm": jm, "ds": _cdesc(body.get("ds")), "r": {}, "req": {},
                            "m": {uid: {"j": int(now), "jw": w, "jg": _week_gain(me, w)}}}
-                d["clanof"][uid] = cid; ev = "🏰 Клан создан: %s %s" % (e, name)
+                d["clanof"][uid] = cid
+                for x in cl.values(): (x.get("req") or {}).pop(uid, None)
+                d["grants"].setdefault(uid, []).append({"id": uuid.uuid4().hex[:12], "sku": "adm_coins_-%d" % CLAN_COST})
+                ev = "🏰 Клан создан: %s %s (−%d 🪙)" % (e, name, CLAN_COST)
         elif op == "join":
             code = re.sub(r"[^A-Z0-9]", "", str(body.get("code") or "").upper())
             tc = next((k for k, x in cl.items() if x["c"] == code), None) if code else None
@@ -1166,33 +1221,87 @@ def clan_api(body, bot=None):
             elif not tc: err = "Клан с таким кодом не найден"
             elif len(cl[tc]["m"]) >= CLAN_MAX: err = "В клане нет мест (макс. %d)" % CLAN_MAX
             else:
-                cl[tc]["m"][uid] = {"j": int(now), "jw": w, "jg": _week_gain(me, w)}
-                d["clanof"][uid] = tc; cid = tc; ev = "🏰 Вступил в клан %s %s" % (cl[tc]["e"], cl[tc]["n"])
+                _cjoin(d, uid, tc, w, me); cid = tc; ev = "🏰 Вступил в клан %s %s" % (cl[tc]["e"], cl[tc]["n"])
+        elif op in ("joinopen", "apply"):
+            tc = str(body.get("id") or ""); x = cl.get(tc)
+            if c: err = "Вы уже в клане"
+            elif d["clanl"].get(uid, 0) + CLAN_CD > now: err = "После выхода из клана нужно подождать до суток"
+            elif not x: err = "Клан не найден"
+            elif len(x["m"]) >= CLAN_MAX: err = "В клане нет мест (макс. %d)" % CLAN_MAX
+            elif op == "joinopen":
+                if x.get("jm") != "open": err = "В этот клан вход по заявке"
+                else: _cjoin(d, uid, tc, w, me); cid = tc; ev = "🏰 Вступил в клан %s %s" % (x["e"], x["n"])
+            else:
+                if x.get("jm") != "req": err = "В этот клан нельзя подать заявку"
+                else:
+                    rq = x.setdefault("req", {})
+                    for k2 in [k for k, v in rq.items() if now - v.get("t", 0) > CLAN_REQ_TTL]: rq.pop(k2, None)
+                    if uid in rq: err = "Заявка уже подана"
+                    elif sum(1 for y in cl.values() if uid in (y.get("req") or {})) >= 3: err = "Не больше 3 заявок одновременно"
+                    elif len(rq) >= 30: err = "У клана слишком много заявок"
+                    else:
+                        rq[uid] = {"t": int(now)}
+                        tell.append((x["o"], "📨 В клан «%s» подана заявка от %s. Откройте игру → Клан → Заявки." % (x["n"], _clean(me.get("name"), 16) or "игрока")))
+        elif op in ("accept", "decline"):
+            if not c or my not in ("o", "d"): err = "Это могут только глава и помощники"
+            else:
+                tu = next((u for u in (c.get("req") or {}) if hid(u) == str(body.get("h", ""))), None)
+                if not tu: err = "Заявка не найдена"
+                elif op == "decline": c["req"].pop(tu, None)
+                elif tu in d["clanof"]: c["req"].pop(tu, None); err = "Игрок уже вступил в другой клан"
+                elif len(c["m"]) >= CLAN_MAX: err = "В клане нет мест"
+                else:
+                    _cjoin(d, tu, cid, w, pl.get(tu) or {}); ev = "🏰 В клан %s принят игрок %s" % (c["n"], (pl.get(tu) or {}).get("name", "?"))
+                    tell.append((tu, "🏰 Вас приняли в клан «%s»! Откройте игру → Клан." % c["n"]))
         elif op == "leave":
             if not c: err = "Вы не в клане"
             else:
-                c["m"].pop(uid, None); d["clanof"].pop(uid, None); d["clanl"][uid] = int(now)
-                if not c["m"]: cl.pop(cid, None)
-                elif c["o"] == uid: c["o"] = min(c["m"], key=lambda u: c["m"][u].get("j", 0))
-                ev = "🏰 Вышел из клана %s" % c["n"]
-        elif op in ("kick", "newcode", "disband"):
-            if not c or c["o"] != uid: err = "Это может только создатель клана"
+                _cremove(d, c, cid, uid); d["clanl"][uid] = int(now); ev = "🏰 Вышел из клана %s" % c["n"]
+        elif op in ("kick", "promote", "demote", "transfer", "set", "newcode", "disband"):
+            if not c: err = "Вы не в клане"
+            elif op == "kick":
+                tu = tgt()
+                if my not in ("o", "d"): err = "Исключать могут глава и помощники"
+                elif not tu or tu == uid: err = "Нельзя исключить этого игрока"
+                elif my == "d" and _crole(c, tu) != "m": err = "Помощник может исключать только участников"
+                else:
+                    _cremove(d, c, cid, tu); d["clanl"][tu] = int(now)
+                    ev = "🏰 Исключён из клана %s: %s" % (c["n"], (pl.get(tu) or {}).get("name", "?"))
+                    tell.append((tu, "🏰 Вас исключили из клана «%s»." % c["n"]))
+            elif my != "o": err = "Это может только глава клана"
             elif op == "newcode": c["c"] = _ccode(d)
+            elif op == "set":
+                if body.get("jm") in CLAN_JM: c["jm"] = body.get("jm")
+                if "ds" in body: c["ds"] = _cdesc(body.get("ds"))
             elif op == "disband":
                 for u in list(c["m"]): d["clanof"].pop(u, None)
                 cl.pop(cid, None); ev = "🏰 Клан распущен: %s" % c["n"]
             else:
-                tu = next((u for u in c["m"] if hid(u) == str(body.get("h", ""))), None)
-                if not tu or tu == uid: err = "Нельзя исключить этого игрока"
+                tu = tgt()
+                if not tu or tu == uid: err = "Выберите другого игрока"
+                elif op == "promote":
+                    r_ = c.setdefault("r", {})
+                    if tu in r_: err = "Он уже помощник"
+                    elif len(r_) >= CLAN_HELPERS: err = "Помощников может быть не больше %d" % CLAN_HELPERS
+                    else: r_[tu] = {"t": int(now)}
+                elif op == "demote": (c.setdefault("r", {})).pop(tu, None)
                 else:
-                    c["m"].pop(tu, None); d["clanof"].pop(tu, None); d["clanl"][tu] = int(now)
-                    ev = "🏰 Исключён из клана %s: %s" % (c["n"], (pl.get(tu) or {}).get("name", "?"))
-        elif op != "info":
+                    c["o"] = tu; r_ = c.setdefault("r", {}); r_.pop(tu, None)
+                    if len(r_) < CLAN_HELPERS: r_[uid] = {"t": int(now)}
+                    ev = "🏰 Глава клана %s передал клан: %s" % (c["n"], (pl.get(tu) or {}).get("name", "?"))
+                    tell.append((tu, "👑 Вы теперь глава клана «%s»!" % c["n"]))
+        elif op not in ("info", "search"):
             err = "op"
-        if ev and not err: P._save(d)
-        res = _cview(d, uid, w)
+        if not err and op not in ("info", "search"): P._save(d)
+        res = _cview(d, uid, w, body.get("q", "") if op == "search" else None)
     if err: res["ok"] = False; res["err"] = err
     elif ev: notify("act", ev + " (игрок %s)" % _nm(uid))
+    if tell and bot and not err:
+        def _tell(items=tell):
+            for u, t in items:
+                try: bot.send_message(int(u), t)
+                except Exception: pass
+        threading.Thread(target=_tell, daemon=True).start()
     return res
 
 
