@@ -2522,6 +2522,7 @@ if [[ $ok -eq 1 ]]; then say "Сервисы работают ✅"; else
   err "Код возвращён на прежнюю версию (данные игроков не тронуты). Бот работает как раньше."; exit 1
 fi
 PORT_VAL="$(grep -E '^PORT=' .env | cut -d= -f2 || true)"; PORT_VAL="${PORT_VAL:-3000}"
-curl -fsS --max-time 5 "http://127.0.0.1:$PORT_VAL/event" | grep -q weather && say "API акций и погоды отвечает ✅" || warn "API /event не ответил — смотри journalctl -u minifarm -n 40"
+OK=0; for i in $(seq 1 20); do curl -fsS --max-time 3 "http://127.0.0.1:$PORT_VAL/event" 2>/dev/null | grep -q weather && { OK=1; break; }; sleep 1; done
+[ $OK = 1 ] && say "API отвечает ✅" || warn "API не ответил за 20 с — смотри journalctl -u minifarm -n 40 --no-pager"
 echo
-echo "Готово. Игроки и их данные не затронуты. Новые команды в боте (только админу): /event, /weather, /buys"
+echo "Готово. Игроки и их данные не затронуты. Кланы: создание за 100к, ранги, заявки, поиск."
