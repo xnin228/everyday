@@ -610,23 +610,8 @@ def user_id(init_data):
     except Exception:
         return None
 
-def base(a):
-    """id аккаунта Telegram без номера профиля: '123_1' -> '123'."""
-    return str(a).split("_")[0]
-
-def tgid(a):
-    return int(base(a))
-
-def acct(body):
-    """id фермы: Telegram id для основной фермы и '<id>_1', '<id>_2' для дополнительных (поле sl в запросе)."""
-    u = user_id(body.get("initData", ""))
-    if not u: return None
-    try: sl = int(body.get("sl") or 0)
-    except Exception: sl = 0
-    return u if sl not in (1, 2) else "%s_%d" % (u, sl)
-
 def api_invoice(bot, body):
-    uid, sku = acct(body), str(body.get("sku", ""))
+    uid, sku = user_id(body.get("initData", "")), str(body.get("sku", ""))
     amount = price(sku)
     if not uid or amount is None: return {"error": "bad request"}
     link = bot.create_invoice_link(
@@ -647,7 +632,7 @@ def api_claim(body):
     """v=2: выдачи НЕ удаляются при получении — игра подтверждает их сама (ack),
     поэтому покупка не пропадёт, даже если ответ потерялся по дороге.
     Без v (старая версия игры): как раньше — отдали и удалили."""
-    uid = acct(body)
+    uid = user_id(body.get("initData", ""))
     if not uid: return {"grants": [], "items": []}
     with _Lock():
         d = _load(); items = _norm(d, uid)
@@ -672,7 +657,7 @@ def install(bot, token):
     def _pre(q):
         try:
             uid, sku = q.invoice_payload.split(":", 1)
-            ok = price(sku) == q.total_amount and base(uid) == str(q.from_user.id)
+            ok = price(sku) == q.total_amount and uid == str(q.from_user.id)
         except Exception:
             ok = False
         bot.answer_pre_checkout_query(q.id, ok=ok, error_message=None if ok else "Ошибка заказа")
@@ -706,7 +691,7 @@ def install(bot, token):
             _an.notify("pay", "💰 Покупка: %s — <code>%s</code>, %s ⭐" % (_an._nm(uid), sku, sp.total_amount))
         except Exception: pass
         if rb and inv:
-            try: bot.send_message(tgid(inv), "🤝 Ваш друг сделал покупку: вам +%d 🪙 (партнёрская программа). Заберите в игре!" % rb)
+            try: bot.send_message(int(inv), "🤝 Ваш друг сделал покупку: вам +%d 🪙 (партнёрская программа). Заберите в игре!" % rb)
             except Exception: pass
 
     # платёжные обработчики — раньше общих «ловушек» из server.py
@@ -765,7 +750,7 @@ class H(BaseHTTPRequestHandler):
             return self._send(429, {"error": "too many requests"})
         try:
             n = int(self.headers.get("Content-Length") or 0)
-            if n > (400000 if self.path == "/bk" else 60000): return self._send(413, {"error": "too large"})
+            if n > 60000: return self._send(413, {"error": "too large"})
             body = json.loads(self.rfile.read(n) or b"{}")
         except Exception: return self._send(400, {"error": "bad json"})
         try:
@@ -779,19 +764,18 @@ class H(BaseHTTPRequestHandler):
                     return self._send(200, {"ok": False, "err": "ban", "ban": _b})
             elif body.get("op") == "ban":
                 return self._send(200, {"ok": False})
-            if self.path == "/bk": return self._send(200, admin.bk_api(body))
             if self.path == "/invoice": return self._send(200, payments.api_invoice(bot, body))
             if self.path == "/claim":
                 if body.get("op") in ("box", "send", "ack"): return self._send(200, admin.mail_api(body, bot))
                 if body.get("op") == "ann": return self._send(200, {"ok": True, "ann": admin.ann_get()})
                 if body.get("op") == "help": return self._send(200, admin.help_api(body, bot))
                 if body.get("op") == "topweek":
-                    u = payments.acct(body)
+                    u = payments.user_id(body.get("initData", ""))
                     return self._send(200, admin.top_week(u) if u else {"ok": False})
                 if body.get("op") in ("ref", "refset", "ping"): return self._send(200, admin.ref_api(body, bot))
                 return self._send(200, payments.api_claim(body))
             if self.path == "/snap":
-                uid = payments.acct(body)
+                uid = payments.user_id(body.get("initData", ""))
                 if not uid: return self._send(200, {"ok": False})
                 ok = admin.record_snapshot(uid, body.get("name"), body.get("lvl"), body.get("xp"), body.get("coins"), body.get("snap"), 1 if body.get("tm") else 0, {"ch": body.get("ch"), "fe": body.get("fe"), "cd": body.get("cd")})
                 return self._send(200, {"ok": bool(ok)})
@@ -958,7 +942,7 @@ def record_snapshot(uid, name, lvl, xp, coins, snap, tm=0, ex=None):
         if now - _last.get(uid, 0) < 15:
             return False
         _last[uid] = now
-    _on[P.base(uid)] = now
+    _on[str(uid)] = now
     if not isinstance(snap, dict) or len(json.dumps(snap)) > 24000:
         return False
     with P._Lock():
@@ -986,7 +970,7 @@ def record_snapshot(uid, name, lvl, xp, coins, snap, tm=0, ex=None):
             "seen": int(now),
             "snap": snap,
         }
-        for _k in ("flag", "trust", "tu", "fa", "lb", "lt", "lbt", "fb", "rst"):
+        for _k in ("flag", "trust", "tu", "fa", "lb", "lt", "lbt", "fb"):
             if _k in old: rec[_k] = old[_k]
         _cd = ex.get("cd")
         if "lb" not in rec and isinstance(_cd, dict) and ex.get("fe") is not None:
@@ -1049,12 +1033,7 @@ def week_tick(bot=None):
         pl = _pload()
         hd = hidden_ids()
         rows = sorted([(u, _week_gain(v, last)) for u, v in pl.items() if not out_of_rating(u, v, hd)], key=lambda r: r[1], reverse=True)
-        rows = [r for r in rows if r[1] > 0]
-        _seen = set(); _r2 = []
-        for r in rows:
-            if P.base(r[0]) in _seen: continue
-            _seen.add(P.base(r[0])); _r2.append(r)
-        rows = _r2[:3]
+        rows = [r for r in rows if r[1] > 0][:3]
         for i, (u, g) in enumerate(rows):
             c, egg, et = WEEK_PRIZES[i]
             gl = dd["grants"].setdefault(u, [])
@@ -1066,7 +1045,7 @@ def week_tick(bot=None):
     if bot:
         for u, place, c, et in wins:
             try:
-                bot.send_message(P.tgid(u), "🏆 Итоги недели: вы заняли %d место в рейтинге ферм!\nНаграда: %d 🪙%s. Откройте игру — награда уже ждёт." % (place, c, (" + " + et) if et else ""))
+                bot.send_message(int(u), "🏆 Итоги недели: вы заняли %d место в рейтинге ферм!\nНаграда: %d 🪙%s. Откройте игру — награда уже ждёт." % (place, c, (" + " + et) if et else ""))
             except Exception:
                 pass
 
@@ -1145,21 +1124,19 @@ def ref_set(uid, code, bot=None):
         d["grants"].setdefault(uid, []).append({"id": uuid.uuid4().hex[:12], "sku": "refw_%d" % REF_WELCOME})
         P._save(d)
     if bot is not None:
-        try: bot.send_message(P.tgid(inv), "🤝 По вашей ссылке пришёл новый фермер! Вы получите %d%% бонусом с его покупок." % REF_PCT)
+        try: bot.send_message(int(inv), "🤝 По вашей ссылке пришёл новый фермер! Вы получите %d%% бонусом с его покупок." % REF_PCT)
         except Exception: pass
     return {"ok": True, "welcome": REF_WELCOME}
 
 
 def ref_api(body, bot=None):
     """POST /claim с op: ref (моя ссылка и статистика) · refset (принять приглашение) · ping (я онлайн)."""
-    uid = P.acct(body)
+    uid = P.user_id(body.get("initData", ""))
     if not uid: return {"ok": False, "err": "auth"}
     op = body.get("op")
     if op == "ping":
-        _on[P.base(uid)] = time.time()
+        _on[uid] = time.time()
         return {"ok": True, "online": online_count()}
-    if "_" in uid:                       # партнёрка только у основной фермы
-        return {"ok": False, "err": "Партнёрская программа — в основной ферме"}
     if op == "refset":
         return ref_set(uid, body.get("code"), bot)
     d = P._load()
@@ -1179,7 +1156,7 @@ def _mclean(s, n):
 
 def mail_api(body, bot=None):
     """Почта игроков. POST /claim с полем op: box (мой ящик) · send (отправить) · ack (подтвердить получение)."""
-    uid = P.acct(body)
+    uid = P.user_id(body.get("initData", ""))
     if not uid:
         return {"ok": False, "err": "auth"}
     op = body.get("op")
@@ -1204,7 +1181,6 @@ def mail_api(body, bot=None):
             if hid(u) == to: rid = u; break
         if not rid: return {"ok": False, "err": "Игрок не найден"}
         if rid == uid: return {"ok": False, "err": "Нельзя дарить самому себе"}
-        if P.base(rid) == P.base(uid): return {"ok": False, "err": "Нельзя дарить своим же фермам"}
         kind = body.get("kind")
         try: n = int(body.get("n", 0))
         except Exception: n = 0
@@ -1247,7 +1223,7 @@ def mail_api(body, bot=None):
         notify = (rid, fn)
     if notify and bot:
         def _n():
-            try: bot.send_message(P.tgid(notify[0]), "🎁 %s прислал(а) вам подарок!\nОткройте игру → вкладка «Почта»." % notify[1])
+            try: bot.send_message(int(notify[0]), "🎁 %s прислал(а) вам подарок!\nОткройте игру → вкладка «Почта»." % notify[1])
             except Exception: pass
         threading.Thread(target=_n, daemon=True).start()
     return {"ok": True, "left": MAIL_DAY_LIMIT - q["n"]}
@@ -1259,14 +1235,13 @@ HELP_OWNER = 30           # монет владельцу за помощь
 
 def help_api(body, bot=None):
     """POST /claim, op=help: помочь чужой ферме. Владелец получает подарок в почту, помогающий — награду в клиенте."""
-    uid = P.acct(body)
+    uid = P.user_id(body.get("initData", ""))
     if not uid: return {"ok": False, "err": "auth"}
     to = str(body.get("to", "")); rid = None
     for u in _pload():
         if hid(u) == to: rid = u; break
     if not rid: return {"ok": False, "err": "Игрок не найден"}
     if rid == uid: return {"ok": False, "err": "Это ваша ферма"}
-    if P.base(rid) == P.base(uid): return {"ok": False, "err": "Это ваша ферма"}
     with P._Lock():
         d = P._load(); box = d.setdefault("mail", {})
         today = time.strftime("%Y-%m-%d")
@@ -1284,7 +1259,7 @@ def help_api(body, bot=None):
         left = HELP_DAY_LIMIT - len(hq["to"])
     if bot:
         def _n():
-            try: bot.send_message(P.tgid(rid), "🤝 %s помог(ла) вашей ферме! +%d 🪙 ждут в «Почте»." % (fn, HELP_OWNER))
+            try: bot.send_message(int(rid), "🤝 %s помог(ла) вашей ферме! +%d 🪙 ждут в «Почте»." % (fn, HELP_OWNER))
             except Exception: pass
         threading.Thread(target=_n, daemon=True).start()
     return {"ok": True, "left": left}
@@ -1336,7 +1311,7 @@ def resolve(q):
     """Telegram id или часть имени -> (uid, запись) либо (None, список совпадений)."""
     q = q.strip().lstrip("@")
     d = _pload()
-    if re.fullmatch(r"\d+(_[12])?", q):
+    if q.isdigit():
         return q, d.get(q)
     hits = [(u, v) for u, v in d.items() if q.lower() in (v.get("name") or "").lower()]
     if len(hits) == 1:
@@ -1410,25 +1385,25 @@ def bans():
 
 
 def ban_get(uid):
-    return bans().get(P.base(uid))
+    return bans().get(str(uid))
 
 
 def ban_set(admin_id, uid, reason):
-    uid = P.base(uid); reason = _mclean(reason, 300) or "Нарушение правил игры"
+    uid = str(uid); reason = _mclean(reason, 300) or "Нарушение правил игры"
     d = _dload(); b = d.get("bans") or {}
     b[uid] = {"r": reason, "t": int(time.time())}; d["bans"] = b
     (d.get("scores") or {}).pop(uid, None)
     _dsave(d); _BC["m"] = -1
-    for _u in [k for k in _pload() if P.base(k) == uid] or [uid]: hide_set(_u, True)
+    hide_set(uid, True)
     log(admin_id, uid, "BAN: " + reason)
     notify("sec", "🚫 Бан: %s — %s" % (_nm(uid), _mclean(reason, 120)))
 
 
 def unban(admin_id, uid):
-    uid = P.base(uid); d = _dload(); b = d.get("bans") or {}
+    uid = str(uid); d = _dload(); b = d.get("bans") or {}
     ok = b.pop(uid, None) is not None; d["bans"] = b
     _dsave(d); _BC["m"] = -1
-    for _u in [k for k in _pload() if P.base(k) == uid] or [uid]: hide_set(_u, False)
+    hide_set(uid, False)
     log(admin_id, uid, "UNBAN")
     return ok
 
@@ -1524,75 +1499,6 @@ def audit_text():
     return "\n".join(t)
 
 
-BKD = os.path.join(HERE, "backups")
-_bkt = {}
-BK_MAX = 350000
-
-
-def _bkf(acc, prev=False):
-    return os.path.join(BKD, str(acc) + (".prev" if prev else "") + ".json")
-
-
-def _bk_read(acc):
-    try:
-        with open(_bkf(acc), encoding="utf-8") as f: return json.load(f)
-    except Exception:
-        return None
-
-
-def _bk_meta(b):
-    return {"has": 1, "t": b.get("t"), "ts": b.get("ts"), "xp": b.get("xp"), "name": b.get("name"),
-            "lvl": int(((b.get("xp") or 0) / LVX) ** 0.5) + 1}
-
-
-def bk_api(body):
-    """Резервные копии ферм на сервере. op: put (сохранить) · get (скачать) · list (какие копии есть у моих ферм)."""
-    uid = P.acct(body)
-    if not uid: return {"ok": False, "err": "auth"}
-    op = body.get("op")
-    if op == "list":
-        out = []
-        for sl in (0, 1, 2):
-            acc = P.base(uid) + ("_%d" % sl if sl else "")
-            b = _bk_read(acc)
-            out.append(_bk_meta(b) if b else {"has": 0})
-        return {"ok": True, "slots": out}
-    if op == "get":
-        b = _bk_read(uid)
-        if not b: return {"ok": True, "has": 0}
-        r = _bk_meta(b); r["ok"] = True; r["d"] = b.get("d"); return r
-    if op != "put": return {"ok": False, "err": "op"}
-    data = body.get("data")
-    if not isinstance(data, str) or len(data) > BK_MAX: return {"ok": False, "err": "size"}
-    now = time.time()
-    with _lk:
-        if now - _bkt.get(uid, 0) < 20: return {"ok": False, "err": "rate"}
-        _bkt[uid] = now
-    try: s = json.loads(data)
-    except Exception: return {"ok": False, "err": "json"}
-    if not isinstance(s, dict) or not isinstance(s.get("plots"), list) or not s.get("fname"):
-        return {"ok": False, "err": "bad"}
-    ts = int(s.get("ts") or 0); xp = max(0, min(10 ** 9, int(s.get("xp") or 0)))
-    rst = (_pload().get(uid) or {}).get("rst", 0)
-    if rst and ts / 1000.0 < rst: return {"ok": False, "err": "reset"}
-    old = _bk_read(uid)
-    # защита от случайной перезаписи большой фермы маленькой (например, новое устройство)
-    if old and (old.get("xp") or 0) > 2000 and xp < (old.get("xp") or 0) * 0.6 and not body.get("ov"):
-        return {"ok": False, "err": "smaller"}
-    try:
-        os.makedirs(BKD, exist_ok=True)
-        if old and now - (old.get("t") or 0) > 6 * 3600:
-            try: os.replace(_bkf(uid), _bkf(uid, True))
-            except Exception: pass
-        rec = {"t": int(now), "ts": ts, "xp": xp, "name": _clean(s.get("fname"), 24), "d": data}
-        tmp = _bkf(uid) + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f: json.dump(rec, f, ensure_ascii=False)
-        os.replace(tmp, _bkf(uid))
-    except Exception:
-        return {"ok": False, "err": "io"}
-    return {"ok": True}
-
-
 def reset_player(admin_id, uid, reason):
     """Обнуляет прогресс игрока: в очередь ставится выдача adm_reset с причиной (игра покажет её на экране)."""
     uid = str(uid); reason = _mclean(reason, 300) or "Решение администрации"
@@ -1604,15 +1510,12 @@ def reset_player(admin_id, uid, reason):
         pl = _pload()
         v = pl.get(uid)
         if v:
-            v.update({"xp": 0, "lvl": 1, "coins": 0, "wb": 0, "rst": time.time()}); v.pop("flag", None)
+            v.update({"xp": 0, "lvl": 1, "coins": 0, "wb": 0}); v.pop("flag", None)
             v.pop("pwk", None); v.pop("pg", None)
             for _k in ("lb", "lt", "lbt", "fb"): v.pop(_k, None)
             _psave(pl)
     try: score_drop(uid)
     except Exception: pass
-    for _p in (False, True):
-        try: os.remove(_bkf(uid, _p))
-        except Exception: pass
     log(admin_id, uid, "RESET: " + reason)
     return gid
 
@@ -1625,7 +1528,7 @@ def mail_api(body, bot=None):
     r = _mail0(body, bot)
     try:
         if body.get("op") == "send" and isinstance(r, dict) and r.get("ok"):
-            uid = P.acct(body)
+            uid = P.user_id(body.get("initData", ""))
             notify("act", "✉️ Почта: %s отправил подарок" % _nm(uid))
     except Exception: pass
     return r
@@ -1635,7 +1538,7 @@ def help_api(body, bot=None):
     r = _help0(body, bot)
     try:
         if isinstance(r, dict) and r.get("ok"):
-            uid = P.acct(body)
+            uid = P.user_id(body.get("initData", ""))
             notify("act", "🤝 Помощь: %s помог соседу" % _nm(uid))
     except Exception: pass
     return r
@@ -1802,7 +1705,7 @@ def install(bot):
             return None
         queue(uid, g); log(admin, uid, g)
         try:
-            bot.send_message(P.tgid(uid), "🎁 Вам выдано: %s\nОткройте игру — получите." % describe(g))
+            bot.send_message(int(uid), "🎁 Вам выдано: %s\nОткройте игру — получите." % describe(g))
         except Exception:
             pass
         return g
@@ -1964,7 +1867,7 @@ def install(bot):
             return bot.reply_to(m, "Пример: /ban 123456789 Накрутка через изменение сохранения\nПричина обязательна — игрок увидит её на экране.")
         uid, rec = resolve(q[1])
         if not uid: return bot.reply_to(m, "Игрок не найден или найдено несколько. Используйте /find.")
-        if is_admin(P.tgid(uid)) if re.fullmatch(r"\d+(_[12])?", str(uid)) else False: return bot.reply_to(m, "Админа банить нельзя.")
+        if is_admin(int(uid)) if str(uid).isdigit() else False: return bot.reply_to(m, "Админа банить нельзя.")
         ask_ban(m.chat.id, uid, q[2])
 
     @bot.message_handler(commands=["unban"])
@@ -1976,7 +1879,7 @@ def install(bot):
         if not uid: uid = q[1].strip()
         if unban(m.from_user.id, uid):
             bot.reply_to(m, "✅ Бан снят. Игра разблокируется у игрока при следующей проверке (до минуты).")
-            try: bot.send_message(P.tgid(uid), "✅ Блокировка в «Мини-ферме» снята.")
+            try: bot.send_message(int(uid), "✅ Блокировка в «Мини-ферме» снята.")
             except Exception: pass
         else:
             bot.reply_to(m, "Этот игрок не в бане.")
@@ -2105,7 +2008,7 @@ def install(bot):
                 pl = _pload(); r = pl.get(uid_)
                 if r is not None: r.pop("flag", None); _psave(pl)
             reset_player(c.from_user.id, uid_, reason_)
-            try: bot.send_message(P.tgid(uid_), "⚠️ Ваш прогресс в «Мини-ферме» обнулён.\nПричина: %s" % reason_)
+            try: bot.send_message(int(uid_), "⚠️ Ваш прогресс в «Мини-ферме» обнулён.\nПричина: %s" % reason_)
             except Exception: pass
             show("🗑 Прогресс обнулён, игрок увидит причину в игре."); bot.answer_callback_query(c.id); return
         elif act in ("ok", "no"):
@@ -2117,12 +2020,12 @@ def install(bot):
             kind, pl = pe
             if kind == "reset":
                 reset_player(c.from_user.id, pl[0], pl[1])
-                try: bot.send_message(P.tgid(pl[0]), "⚠️ Ваш прогресс в «Мини-ферме» обнулён.\nПричина: %s" % pl[1])
+                try: bot.send_message(int(pl[0]), "⚠️ Ваш прогресс в «Мини-ферме» обнулён.\nПричина: %s" % pl[1])
                 except Exception: pass
                 show("✅ Прогресс игрока обнулён. Он увидит причину при открытии игры.")
             elif kind == "ban":
                 ban_set(c.from_user.id, pl[0], pl[1])
-                try: bot.send_message(P.tgid(pl[0]), "🚫 Ваш аккаунт в «Мини-ферме» заблокирован.\nПричина: %s" % pl[1])
+                try: bot.send_message(int(pl[0]), "🚫 Ваш аккаунт в «Мини-ферме» заблокирован.\nПричина: %s" % pl[1])
                 except Exception: pass
                 show("🚫 Игрок забанен. Игра заблокируется у него при следующей проверке (до минуты). Снять: /unban %s" % pl[0])
             elif kind == "ann":
