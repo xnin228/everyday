@@ -389,7 +389,7 @@ function bots(){
 }
 function myName(){var u=tg()&&tg().initDataUnsafe&&tg().initDataUnsafe.user;return S.name||(u&&u.first_name)||T('Фермер')}
 function rows(){
-  var a=TOP?TOP.map(function(r){return{n:r.name,xp:r.xp,me:String(r.id)===String(S.uid)}}):bots().concat([{n:myName(),xp:S.xp,me:1}]);
+  var a=TOP?TOP.map(function(r){return{n:(r.ce?r.ce+' ':'')+r.name,xp:r.xp,me:String(r.id)===String(S.uid)}}):bots().concat([{n:myName(),xp:S.xp,me:1}]);
   a.sort(function(x,y){return y.xp-x.xp});return a
 }
 function rk(){var a=rows();for(var i=0;i<a.length;i++)if(a[i].me)return i+1;return a.length}
@@ -681,7 +681,7 @@ function viewBarn(){
 }
 function paint(){
   setMH();paintHead();
-  daily();$('#view').innerHTML=E(tab==='farm'?viewFarm():tab==='orders'?viewOrders():tab==='pen'?viewPen()+viewOven():tab==='daily'?viewDaily():tab==='shop'?viewDonate():tab==='build'?viewBuild():tab==='worlds'?viewWorlds():tab==='pets'?viewPets():tab==='event'?viewEvent():tab==='mail'?viewMail():tab==='farms'?viewFarms():tab==='visit'?viewVisit():tab==='profile'?viewProfile():tab==='town'?viewTown():tab==='top'?viewTop():tab==='credits'?viewCredits():viewBarn());alerts();tickTs(1);renderHen();
+  daily();$('#view').innerHTML=E(tab==='farm'?viewFarm():tab==='orders'?viewOrders():tab==='pen'?viewPen()+viewOven():tab==='daily'?viewDaily():tab==='shop'?viewDonate():tab==='build'?viewBuild():tab==='worlds'?viewWorlds():tab==='clan'?viewClan():tab==='pets'?viewPets():tab==='event'?viewEvent():tab==='mail'?viewMail():tab==='farms'?viewFarms():tab==='visit'?viewVisit():tab==='profile'?viewProfile():tab==='town'?viewTown():tab==='top'?viewTop():tab==='credits'?viewCredits():viewBarn());alerts();tickTs(1);renderHen();
   if(tab==='farm'){tick(true);initMap()}else if(tab==='visit')initMap();else if(tab==='pen')initPen();var fb=$('#fab');if(fb){fb.classList.toggle('on',bxm()>1||vipOn());fb.querySelector('i').textContent=bxm()>1?'×'+S.bx.m:vipOn()?'VIP':''}
 }
 function tick(force){
@@ -871,6 +871,25 @@ document.addEventListener('click',function(e){var b=e.target.closest&&e.target.c
   else if(d.esh)edStash();
   else if(d.esk1){var o=edSel();if(o)skOpen('obj',BLD.i)}});
 
+/* --- скины и бирки питомцев --- */
+var PSK={ice:{n:'Лёд',e:'❄️',p:45,r:[[0,'#06223d'],[.4,'#2f86c8'],[.75,'#9be4ff'],[1,'#ffffff']]},
+candy:{n:'Конфета',e:'🍬',p:45,r:[[0,'#3d0a2a'],[.4,'#d93f86'],[.75,'#ff9fcb'],[1,'#fff0f7']]},
+neon:{n:'Неон',e:'💚',p:60,r:[[0,'#04120c'],[.35,'#00a85a'],[.7,'#39ff88'],[1,'#e8fff2']]},
+shadow:{n:'Тень',e:'🌑',p:60,r:[[0,'#07040f'],[.4,'#3c1f6e'],[.75,'#8a5be0'],[1,'#e2d0ff']]},
+gold:{n:'Золото',e:'👑',p:75,r:[[0,'#2b1b02'],[.35,'#a56d08'],[.7,'#ffcf3a'],[1,'#fff8c8']]},
+holo:{n:'Голограмма',e:'🌈',p:100,holo:1,r:[]}};
+function pskHx(c){var n=parseInt(c.slice(1),16);return[n>>16,n>>8&255,n&255]}
+function pskLut(sk){var d=PSK[sk];if(d.lut)return d.lut;var L=new Uint8Array(768),i,j,t,a,b,k,c1,c2,q=d.r;
+  for(i=0;i<256;i++){t=i/255;a=q[0];b=q[q.length-1];for(j=0;j<q.length-1;j++)if(t>=q[j][0]&&t<=q[j+1][0]){a=q[j];b=q[j+1];break}
+    k=(t-a[0])/((b[0]-a[0])||1);c1=pskHx(a[1]);c2=pskHx(b[1]);for(j=0;j<3;j++)L[i*3+j]=Math.round(c1[j]+(c2[j]-c1[j])*k)}
+  return d.lut=L}
+function pskApply(g,w,h,sk,now){var d=PSK[sk];if(!d)return;var im=g.getImageData(0,0,w,h),p=im.data,n=p.length,i,l,L;
+  if(d.holo){var hu,s=.85,lg,q,pp,c;
+    for(i=0;i<n;i+=4){if(p[i+3]<120)continue;l=(p[i]*77+p[i+1]*150+p[i+2]*29)>>8;hu=(((i>>2)%w)*2.6+now/16)%360;lg=.2+.62*l/255;q=lg<.5?lg*(1+s):lg+s-lg*s;pp=2*lg-q;
+      c=[hu/360+1/3,hu/360,hu/360-1/3].map(function(t){t=(t%1+1)%1;return Math.round(255*(t<1/6?pp+(q-pp)*6*t:t<.5?q:t<2/3?pp+(q-pp)*(2/3-t)*6:pp))});
+      p[i]=c[0];p[i+1]=c[1];p[i+2]=c[2]}}
+  else{L=pskLut(sk);for(i=0;i<n;i+=4){if(p[i+3]<120)continue;l=(p[i]*77+p[i+1]*150+p[i+2]*29)>>8;p[i]=L[l*3];p[i+1]=L[l*3+1];p[i+2]=L[l*3+2]}}
+  g.putImageData(im,0,0)}
 /* ===== МИР ХЭЛЛОУИНА: «Тыквенная долина» ===== */
 function tDead(g,x,y){R(g,'rgba(0,0,0,.25)',x-12,y-3,24,5);R(g,'#14101c',x-4,y-42,8,42);R(g,'#3a2a48',x-2,y-42,3,42);R(g,'#14101c',x-15,y-35,13,3);R(g,'#14101c',x-16,y-42,3,9);R(g,'#14101c',x+3,y-29,14,3);R(g,'#14101c',x+15,y-38,3,11);R(g,'#14101c',x-8,y-48,3,8);R(g,'#14101c',x+1,y-49,3,9);R(g,'#3a2a48',x-14,y-35,10,1);R(g,'#ff8a1c',x+15,y-31,3,3)}
 function tPumpB(g,x,y){R(g,'rgba(0,0,0,.2)',x-10,y-2,20,4);pell(g,'#7a3004',x-4,y-5,6,5);pell(g,'#ff8a1c',x-4,y-6,5,4);R(g,'#2f7d32',x-5,y-12,2,3);pell(g,'#7a3004',x+5,y-4,5,4);pell(g,'#f26a0c',x+5,y-5,4,3);R(g,'#14101c',x-6,y-7,1,1);R(g,'#14101c',x-2,y-7,1,1)}
@@ -1003,7 +1022,7 @@ viewVisit=function(){var h=_viewVisit0();if(!VS||!VINFO||!API)return h;var dn=he
  return h.replace('<button class="btn alt" data-mto=','<button class="btn" data-help="'+esc(VINFO.id)+'" style="width:100%;margin-bottom:8px"'+(dn?' disabled':'')+'>'+(dn?'🤝 Сегодня уже помогли':'🤝 Помочь ферме · +'+HELPR+' 🪙')+'</button><button class="btn alt" data-mto=')};
 document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button[data-help]');if(b)helpGo(b.dataset.help)});
 var TWK=null,TWBUSY=0,TWT=0,TWTAB=0;
-function twLoad(){if(!API||TWBUSY||Date.now()-TWT<20000)return;TWBUSY=1;TWT=Date.now();api('/claim',{op:'topweek'}).then(function(j){TWBUSY=0;if(j&&j.ok){TWK=j;TWK.at=Date.now();if(tab==='top')paint()}}).catch(function(){TWBUSY=0})}
+function twLoad(){if(!API||TWBUSY||Date.now()-TWT<20000)return;TWBUSY=1;TWT=Date.now();api('/claim',{op:'topweek'}).then(function(j){TWBUSY=0;if(j&&j.ok){TWK=j;(TWK.rows||[]).forEach(function(r){if(r.ce)r.name=r.ce+' '+r.name});TWK.at=Date.now();if(tab==='top')paint()}}).catch(function(){TWBUSY=0})}
 var _viewTop0=viewTop;
 viewTop=function(){twLoad();
  var tabs='<div class="skt" style="margin-bottom:10px"><button class="btn'+(TWTAB?' alt':'')+'" data-twt="0">🏆 Неделя</button><button class="btn'+(TWTAB?'':' alt')+'" data-twt="1">⭐ Всё время</button></div>';
@@ -1048,6 +1067,52 @@ var BANT=0;
 function banCheck(){if(!API||!S)return;api('/claim',{op:'ban'}).then(function(j){if(j&&j.ok)banApply(j.ban||null)}).catch(function(){})}
 setTimeout(function(){if(S&&S.bn)banShow(S.bn);banCheck()},1100);
 setInterval(banCheck,45000);
+/* ===== КЛАНЫ (без войн: общая цель недели) ===== */
+var CLN=null,CLNT=0,CLNB=0,CLE='🏰',CLCONF='',CLCT=0;
+function clanOk(){return API&&tg()&&tg().initData}
+function clanLoad(force){if(!clanOk()||CLNB||(!force&&Date.now()-CLNT<15000))return;CLNB=1;CLNT=Date.now();
+ api('/clan',{op:'info'}).then(function(j){CLNB=0;if(j&&j.ok){CLN=j;clanPaint()}}).catch(function(){CLNB=0})}
+function clanPaint(){if(tab!=='clan')return;var a=document.activeElement;if(a&&a.tagName==='INPUT')return;paint()}
+function clanDo(b,msg){if(CLNB)return;CLNB=1;CLCONF='';
+ api('/clan',b).then(function(j){CLNB=0;if(j){if(j.per)CLN=j;CLNT=Date.now();if(j.ok===false&&j.err)toast(j.err);else if(msg)toast(msg)}paint()}).catch(function(){CLNB=0;toast('Нет связи с сервером')})}
+function clFmtLeft(s){return s>=86400?Math.floor(s/86400)+' д '+Math.floor(s%86400/3600)+' ч':fmt(Math.max(0,s))}
+function viewClan(){clanLoad();
+ var back='<button class="btn" data-tab="town" style="width:100%;margin-top:12px">Назад в город</button>',h='<h2>🏰 Клан</h2>';
+ if(!clanOk())return h+'<p class="empty">Кланы работают внутри Telegram.</p>'+back;
+ if(!CLN)return h+'<p class="empty">Загружаю…</p>'+back;
+ var c=CLN.clan,i;
+ if(!c){
+  h+='<div class="r" style="margin-bottom:10px">Играйте вместе: у клана общая цель недели. Выполнили — награда каждому. Никаких войн, только уют.</div>';
+  if(CLN.cd)h+='<p class="r" style="color:#e8a317;margin-bottom:8px">После выхода из клана подождите '+clFmtLeft(CLN.cd)+'.</p>';
+  h+='<div class="card" style="flex-wrap:wrap;gap:8px"><div class="t" style="width:100%">🔑 Вступить по коду<div class="r">Код даёт создатель клана</div></div><input id="clcode" maxlength="8" placeholder="КОД" aria-label="Код клана" style="flex:1;text-transform:uppercase;min-width:0"><button class="btn" data-clj="1">Вступить</button></div>';
+  h+='<div class="card" style="flex-wrap:wrap;gap:8px"><div class="t" style="width:100%">➕ Создать клан<div class="r">До '+CLN.max+' игроков. Цель недели растёт вместе с числом участников.</div></div><input id="clname" maxlength="16" placeholder="Название клана" aria-label="Название клана" style="width:100%"><div style="display:flex;flex-wrap:wrap;gap:4px;width:100%">'+CLN.emo.map(function(e,k){return'<button class="btn'+(e===CLE?'':' alt')+'" data-cle="'+k+'" style="padding:4px 8px;font-size:16px">'+e+'</button>'}).join('')+'</div><button class="btn" data-clc="1" style="width:100%">Создать клан '+CLE+'</button></div>';
+ }else{
+  var pct=Math.min(100,Math.round(100*c.total/(c.goal*2)));
+  h+='<div class="card" style="border-color:#e8a317;flex-wrap:wrap;gap:6px"><div class="t" style="width:100%;font-size:15px">'+c.e+' '+esc(c.n)+'<div class="r">'+c.members.length+' / '+CLN.max+' игроков · до конца недели '+clFmtLeft(CLN.left)+'</div></div>'
+   +'<div style="width:100%;display:flex;gap:6px;align-items:center"><div class="r" style="flex:1">Код приглашения: <b style="font-size:15px;letter-spacing:2px">'+esc(c.code)+'</b></div><button class="btn alt" data-clcopy="1">📋</button><button class="btn" data-clshare="1">📨 Позвать</button></div></div>';
+  h+='<h3 class="sh">🎯 Общая цель недели</h3><div class="card" style="flex-wrap:wrap;gap:6px"><div class="t" style="width:100%">'+c.total+' / '+c.goal+' опыта<div class="r">Каждый участник фермы вносит свой опыт за неделю</div></div><div class="bar" style="height:10px;width:100%"><i style="width:'+pct+'%"></i></div>';
+  CLN.tiers.forEach(function(t,k){var ok=c.tier>=k;h+='<div style="width:100%;font-size:12px;opacity:'+(ok?1:.65)+'">'+(ok?'✅ ':'▫️ ')+t.i+' '+Math.round(t.f*100)+'% ('+Math.round(c.goal*t.f)+') → '+t.c+' 🪙'+(t.fe?' + '+t.fe+' 🧪':'')+(t.egg?' + 🥚':'')+'</div>'});
+  h+='<div class="r" style="width:100%">Награда — каждому, кто внёс от '+CLN.minc+' опыта. Выдаётся в начале новой недели.</div></div>';
+  h+='<h3 class="sh">👥 Участники</h3>';
+  c.members.forEach(function(m){h+='<div class="card"'+(m.me?' style="background:var(--gold)"':'')+'><div class="t">'+(m.own?'👑 ':'')+esc(m.name)+'<div class="r">Ур. '+m.lvl+' · +'+m.g+' опыта за неделю</div></div>'+(c.owner&&!m.me?'<button class="btn alt" data-clk="'+m.h+'" aria-label="Исключить">✖</button>':'')+'</div>'});
+  h+='<div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">';
+  if(c.owner)h+='<button class="btn alt" data-cln="1">🔄 Новый код приглашения</button><button class="btn alt" data-cld="1">'+(CLCONF==='d'?'⚠️ Точно распустить? Нажмите повторно':'💥 Распустить клан')+'</button>';
+  h+='<button class="btn alt" data-cll="1">'+(CLCONF==='l'?'⚠️ Точно выйти? Нажмите повторно':'🚪 Выйти из клана')+'</button></div>';
+ }
+ h+='<h3 class="sh">🏆 Рейтинг кланов</h3>';
+ if(!CLN.rank.length)h+='<p class="empty">Пока ни одного клана. Станьте первым!</p>';
+ CLN.rank.forEach(function(r,k){h+='<div class="card"'+(r.me?' style="background:var(--gold)"':'')+'><div class="t">'+(k<3?['🥇','🥈','🥉'][k]:'№'+(k+1))+' '+r.e+' '+esc(r.n)+'<div class="r">'+r.k+' игр. · цель недели '+r.pct+'%</div></div></div>'});
+ return h+back}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-clj],[data-clc],[data-cle],[data-clk],[data-cll],[data-cln],[data-cld],[data-clcopy],[data-clshare]');if(!b)return;var d=b.dataset;
+ if(d.cle!==undefined){if(CLN&&CLN.emo[+d.cle])CLE=CLN.emo[+d.cle];return paint()}
+ if(d.clj){var i=document.getElementById('clcode');var v=i?i.value.trim():'';if(!v)return toast('Введите код клана');return clanDo({op:'join',code:v},'🏰 Вы в клане!')}
+ if(d.clc){var n=document.getElementById('clname');var nv=n?n.value.trim():'';if(nv.length<2)return toast('Введите название клана');return clanDo({op:'create',name:nv,e:CLE},'🏰 Клан создан!')}
+ if(d.clk)return clanDo({op:'kick',h:d.clk},'Игрок исключён');
+ if(d.cln)return clanDo({op:'newcode'},'Новый код готов');
+ if(d.clcopy&&CLN&&CLN.clan){var t=CLN.clan.code;try{navigator.clipboard.writeText(t);toast('Код скопирован: '+t)}catch(x){toast('Код: '+t)}return}
+ if(d.clshare&&CLN&&CLN.clan){var tx='Вступай в мой клан «'+CLN.clan.n+'» в Мини-ферме! Код приглашения: '+CLN.clan.code;
+   try{tg().openTelegramLink('https://t.me/share/url?url='+encodeURIComponent('https://t.me/')+'&text='+encodeURIComponent(tx))}catch(x){toast(tx)}return}
+ if(d.cll||d.cld){var k=d.cll?'l':'d';if(CLCONF===k)return clanDo({op:d.cll?'leave':'disband'},d.cll?'Вы вышли из клана':'Клан распущен');CLCONF=k;clearTimeout(CLCT);CLCT=setTimeout(function(){CLCONF='';if(tab==='clan')paint()},5000);paint()}});
 /* ===== ПИТОМЦЫ: кейсы с яйцами, инкубатор, уход, бонусы ===== */
 var RAR=[{n:'Обычный',c:'#9fb4cc',b:.02,t:600},{n:'Необычный',c:'#5fd05a',b:.03,t:1800},{n:'Редкий',c:'#4aa8ff',b:.05,t:7200},{n:'Эпический',c:'#c05cff',b:.08,t:21600},{n:'Легендарный',c:'#ffb52e',b:.12,t:43200}];
 var BNM={coins:'монет',xp:'опыта',speed:'роста'};
@@ -1064,7 +1129,7 @@ var CASE={c:{n:'Обычный кейс',odds:[62,25,9,3.5,.5]},s:{n:'Звёзд
 var RS=['Обыч.','Необыч.','Редк.','Эпич.','Легенд.'],CPRICE={farm:1500,swamp:3000,future:6000,dino:10000,aqua:15000,halloween:5000},PWSEL='farm';
 function pp(){var p=S.pp;if(!p||typeof p!=='object')p=S.pp={};if(!Array.isArray(p.eggs))p.eggs=[];if(!Array.isArray(p.pets))p.pets=[];if(!Array.isArray(p.act))p.act=[];if(!p.n)p.n=1;return p}
 function ppClean(p){var o={eggs:[],pets:[],act:[],n:1},ids={};if(!p||typeof p!=='object')return o;
-  (p.pets||[]).forEach(function(q){if(q&&PD[q.pid]&&q.u&&!ids[q.u]){ids[q.u]=1;o.pets.push({u:q.u,pid:q.pid,lv:Math.max(1,Math.min(5,q.lv|0||1)),xp:Math.max(0,q.xp|0),fed:+q.fed||0,pt:+q.pt||0})}});
+  (p.pets||[]).forEach(function(q){if(q&&PD[q.pid]&&q.u&&!ids[q.u]){ids[q.u]=1;o.pets.push({u:q.u,pid:q.pid,lv:Math.max(1,Math.min(5,q.lv|0||1)),xp:Math.max(0,q.xp|0),fed:+q.fed||0,pt:+q.pt||0,sk:PSK[q.sk]?q.sk:'',nm:String(q.nm||'').replace(/[<>&"'`]/g,'').slice(0,12)})}});
   (p.eggs||[]).forEach(function(q){if(q&&PD[q.pid]&&o.eggs.length<12)o.eggs.push({id:q.id|0,pid:q.pid,w:PD[q.pid].w,t:+q.t||0,n:q.n?1:0})});
   (p.act||[]).forEach(function(u){if(ids[u]&&o.act.indexOf(u)<0&&o.act.length<PA_MAX)o.act.push(u)});
   o.n=Math.max(p.n|0,1);return o}
@@ -1142,12 +1207,22 @@ function dKraken(g,x,y,d,f,now,e){var i,t=now/260+e.ph;R(g,'rgba(0,0,0,.25)',Mat
   R(g,'#ffe27a',-9,-28,7,6);R(g,'#ffe27a',3,-28,7,6);R(g,'#ff3d9a',-7,-27,3,5);R(g,'#ff3d9a',5,-27,3,5);R(g,'#0f2a5a',-4,-17,9,2);g.restore()}
 function psp(k){return({cat:dCat,dog:dDog,rabbit:dRabbit,fox:dFox,uni:dUni,frog:dFrog,dfly:dDfly,croc:dCroc,wisp:dWisp,ghost:dGhost,cbot:dCbot,drone:dDrone,rbdog:dRbdog,ufo:dUfo,cdrag:dCdrag,trike:dTrike,ptero:dPtero,raptor:dRaptor,bronto:dBronto,trex:dTrex,crab:dCrab,turtle:dTurtle,jelly:dJelly,octo:dOcto,kraken:dKraken,bcat:dBcat,bat:dBat,skel:dSkel,jack:dJack,vamp:dVamp})[k]}
 function hexA(c,a){var n=parseInt(c.slice(1),16);return'rgba('+(n>>16)+','+(n>>8&255)+','+(n&255)+','+a+')'}
-function drawPet(g,e,now,own){var d=PD[e.pid];if(!d)return;var col=RAR[d.r].c,fn=psp(d.id),i;
+function drawPet0(g,e,now,own){var d=PD[e.pid];if(!d)return;var col=RAR[d.r].c,fn=psp(d.id),i;
   g.save();g.translate(Math.round(e.x),Math.round(e.y));
   g.globalAlpha=.4;pell(g,col,0,-1,13,4);g.globalAlpha=1;
   g.save();g.scale(d.z,d.z);fn(g,0,0,e.d,e.mv?e.f:0,now,e);g.restore();
   if(d.r>=3){var n=d.r===4?4:2;for(i=0;i<n;i++){var a=now/(d.r===4?420:700)+i*6.28/n;R(g,d.r===4?'#fff7b0':col,Math.round(Math.cos(a)*15),Math.round(-20-(e.fly?26:0)+Math.sin(a)*9),2,2)}}
   g.restore()}
+var PSO=null;
+function drawPet(g,e,now,own){
+  if(!e.sk||!PSK[e.sk])return drawPet0(g,e,now,own);
+  if(!PSO){PSO=document.createElement('canvas');PSO.width=PSO.height=144;PSO.g=PSO.getContext('2d',{willReadFrequently:true})}
+  var og=PSO.g,oe={},k;og.clearRect(0,0,144,144);for(k in e)oe[k]=e[k];oe.x=72;oe.y=120;
+  drawPet0(og,oe,now,own);pskApply(og,144,144,e.sk,now);
+  g.drawImage(PSO,Math.round(e.x)-72,Math.round(e.y)-120);
+  var c=PSK[e.sk].holo?'#ffffff':PSK[e.sk].r[3][1],a=now/380+(e.ph||0),i;
+  for(i=0;i<2;i++){var t=a+i*3.1;if(Math.sin(t*1.7)>.2)R(g,c,Math.round(e.x+Math.cos(t)*17),Math.round(e.y-18-(e.fly?26:0)+Math.sin(t)*10),2,2)}}
+function ptagDraw(g,x,y,t){g.save();g.font='6px "Press Start 2P",monospace';g.textAlign='center';var w=Math.ceil(g.measureText(t).width);R(g,'rgba(58,36,23,.85)',x-w/2-3,y-6,w+6,10);g.fillStyle='#fff3d6';g.fillText(t,x,y+2);g.restore()}
 var PEL=[],PSIG='';
 function petSync(){var P=S.pp,a=(P&&P.act)||[],sg=(S.uid||'v')+':'+a.map(function(u){var p=petOf(u);return u+(p?p.pid:'')}).join(',');
   if(sg===PSIG)return;PSIG=sg;PEL=[];
@@ -1156,9 +1231,9 @@ function pbub(g,x,y,now){var o=Math.round(Math.sin(now/260)*2);R(g,'#3a2417',x-1
   R(g,'#3a2417',x-5,y-18+o,10,8);R(g,'#d9442e',x-4,y-17+o,8,6);R(g,'#fff3d6',x-2,y-15+o,2,2)}
 /* --- картинки и окна --- */
 var PIMG={};
-function petImg(pid){return PIMG[pid]||(PIMG[pid]=mk(96,96,function(g){var d=PD[pid],e={x:0,y:0,d:1,mv:0,f:0,ph:0,fly:({dfly:1,drone:1,ufo:1,ptero:1,jelly:1,wisp:1,ghost:1,bat:1})[pid]?1:0};
+function petImg(pid,sk){var kk=pid+(sk||'');return PIMG[kk]||(PIMG[kk]=mk(96,96,function(g){var d=PD[pid],e={x:0,y:0,d:1,mv:0,f:0,ph:0,fly:({dfly:1,drone:1,ufo:1,ptero:1,jelly:1,wisp:1,ghost:1,bat:1})[pid]?1:0};
   var HT={uni:52,trex:52,ghost:46,kraken:52,ufo:64,ptero:62,dfly:36,drone:52,jelly:46,bronto:55,bat:52,skel:38,jack:44,vamp:40,wisp:28,octo:30,fox:30,rabbit:30,cdrag:40},k=Math.min(2,72/((HT[pid]||36)*d.z));g.save();g.translate(48,86);g.scale(k,k);g.save();
-  var col=RAR[d.r].c;g.globalAlpha=.4;pell(g,col,0,-1,13,4);g.globalAlpha=1;g.save();g.scale(d.z,d.z);psp(pid)(g,0,0,1,0,600,e);g.restore();g.restore();g.restore()}).toDataURL())}
+  var col=RAR[d.r].c;g.globalAlpha=.4;pell(g,col,0,-1,13,4);g.globalAlpha=1;g.save();g.scale(d.z,d.z);psp(pid)(g,0,0,1,0,600,e);g.restore();g.restore();g.restore();if(sk&&PSK[sk])pskApply(g,96,96,sk,0)}).toDataURL())}
 var PRL=0;
 function petRoll(pid,w){
   if(PRL)return petReveal(pid);PRL=1;var L=PDEF.filter(function(d){return d.w===w}),od=CASE.c.odds,st=[],i,ov=document.createElement('div');
@@ -1192,7 +1267,7 @@ function petsHTML(){
   if(!P.pets.length)h+='<p class="empty">Питомцев пока нет.</p>';
   P.pets.slice().sort(function(a,b){return(P.act.indexOf(b.u)>=0)-(P.act.indexOf(a.u)>=0)||PD[b.pid].r-PD[a.pid].r}).forEach(function(p){
     var d=PD[p.pid],r=RAR[d.r],on=P.act.indexOf(p.u)>=0,fed=p.fed>n,nx=PLVX[p.lv]||0,pv=PLVX[p.lv-1]||0,pr=p.lv>=5?100:Math.round((p.xp-pv)/(nx-pv)*100),can=n>=(p.pt||0)+PPET;
-    h+='<div class="card" style="border-color:'+r.c+';flex-wrap:wrap;gap:8px"><img src="'+petImg(p.pid)+'" alt="" style="width:72px;height:72px;image-rendering:pixelated;flex-shrink:0"><div class="t" style="flex:1;min-width:0"><span style="color:'+r.c+'">'+d.n+'</span> · ур. '+p.lv+(on?' · ✅ в отряде':'')+'<div class="r">'+WORLDS[d.w].e+' '+T(r.n)+'</div><div class="r">'+petBn(d,p.lv)+'</div><div class="r">'+(fed?'🍖 Сыт ещё '+fmt(Math.ceil((p.fed-n)/1000)):'😢 Голоден — бонус не работает')+'</div><div class="bar" style="height:6px;margin-top:4px"><i style="width:'+pr+'%"></i></div></div><div style="display:flex;gap:6px;width:100%"><button class="btn" style="flex:1" data-ptf="'+p.u+'">🍖 Кормить</button><button class="btn alt" style="flex:1" data-ptg="'+p.u+'"'+(can?'':' disabled')+'>💗 Гладить</button><button class="btn alt" style="flex:1" data-pta="'+p.u+'">'+(on?'В зверинец':'В отряд')+'</button></div></div>'});
+    h+='<div class="card" style="border-color:'+r.c+';flex-wrap:wrap;gap:8px"><img src="'+petImg(p.pid,p.sk)+'" alt="" style="width:72px;height:72px;image-rendering:pixelated;flex-shrink:0"><div class="t" style="flex:1;min-width:0"><span style="color:'+r.c+'">'+d.n+'</span>'+(p.nm?' «'+esc(p.nm)+'»':'')+' · ур. '+p.lv+(on?' · ✅ в отряде':'')+'<div class="r">'+WORLDS[d.w].e+' '+T(r.n)+'</div><div class="r">'+petBn(d,p.lv)+'</div><div class="r">'+(fed?'🍖 Сыт ещё '+fmt(Math.ceil((p.fed-n)/1000)):'😢 Голоден — бонус не работает')+'</div><div class="bar" style="height:6px;margin-top:4px"><i style="width:'+pr+'%"></i></div></div><div style="display:flex;gap:6px;width:100%"><button class="btn" style="flex:1" data-ptf="'+p.u+'">🍖 Кормить</button><button class="btn alt" style="flex:1" data-ptg="'+p.u+'"'+(can?'':' disabled')+'>💗 Гладить</button><button class="btn alt" style="flex:1" data-pta="'+p.u+'">'+(on?'В зверинец':'В отряд')+'</button></div><div style="display:flex;gap:6px;width:100%"><button class="btn alt" style="flex:1" data-psk="'+p.u+'">🎨 Скин'+(p.sk?' · '+PSK[p.sk].n:'')+'</button><button class="btn alt" style="flex:1" data-pnm="'+p.u+'">✏️ Бирка</button></div></div>'});
   h+='<div class="r" style="margin:8px 0 12px">Корм: '+WORDER.map(function(k){return WORLDS[k].e+byId(FAV[k]).e}).join(' ')+' · 2–6 шт. своего урожая за раз (или монетами).</div>';
   return h+'<button class="btn" data-tab="farm" style="width:100%">К ферме</button>'}
 function viewPets(){return'<div id="pv">'+petsHTML()+'</div>'}
@@ -1206,6 +1281,24 @@ document.addEventListener('click',function(e){var b=e.target.closest&&e.target.c
   else if(d.pth)eggHatch(+d.pth);else if(d.pts)eggSpeed(+d.pts);
   else if(d.ptf)petFeed(d.ptf);else if(d.ptg)petStroke(d.ptg);else if(d.pta)petAct(d.pta)});
 var _paint1=paint;paint=function(){_paint1();if(tab==='pets'&&!PVT)PVT=setInterval(petsRefresh,1000)};
+/* --- окна: скины и бирка --- */
+var PSKU=null;
+function pskOpen(u){var p=petOf(u);if(!p)return;PSKU=u;
+  var h='<div style="background:var(--panel);border:4px solid #c05cff;box-shadow:0 0 30px #c05cff;padding:14px;width:100%;max-width:360px;max-height:86vh;overflow:auto"><b style="display:block;text-align:center;margin-bottom:8px">🎨 Скины: '+esc(PD[p.pid].n)+'</b><div class="r" style="text-align:center;margin-bottom:6px">Купленный скин подходит всем вашим питомцам.</div>';
+  [''].concat(Object.keys(PSK)).forEach(function(id){var own=!id||(S.psk&&S.psk[id]),on=(p.sk||'')===id,d=id?PSK[id]:null;
+    h+='<div style="display:flex;gap:8px;align-items:center;margin:6px 0;padding:6px;border:2px solid '+(on?'#5fd05a':'rgba(0,0,0,.25)')+'"><img src="'+petImg(p.pid,id)+'" alt="" style="width:56px;height:56px;image-rendering:pixelated"><div style="flex:1;font-size:12px"><b>'+(d?d.e+' '+d.n:'Обычный')+'</b></div>'+(own?'<button class="btn'+(on?'':' alt')+'" data-pskset="'+u+'|'+id+'"'+(on?' disabled':'')+'>'+(on?'Надет':'Надеть')+'</button>':'<button class="btn" data-pskbuy="'+id+'">⭐ '+d.p+'</button>')+'</div>'});
+  h+='<button class="btn alt" data-ovx="pskov" style="width:100%;margin-top:6px">Закрыть</button></div>';
+  var o=admOverlay('pskov',h);o.style.zIndex=99970}
+function pnmOpen(u){var p=petOf(u);if(!p)return;
+  var o=admOverlay('pnmov','<div style="background:var(--panel);border:4px solid #e8a317;box-shadow:0 0 30px #e8a317;padding:16px;width:100%;max-width:320px;text-align:center"><b style="display:block;margin-bottom:8px">✏️ Бирка питомца</b><div class="r" style="margin-bottom:8px">До 12 символов. Бирку увидят все, кто придёт к вам в гости.</div><input id="pnmin" maxlength="12" value="'+esc(p.nm||'')+'" aria-label="Имя питомца" style="width:100%;margin-bottom:10px"><button class="btn" data-pnmsave="'+u+'" style="width:100%;margin-bottom:6px">Сохранить</button><button class="btn alt" data-ovx="pnmov" style="width:100%">Отмена</button></div>');
+  o.style.zIndex=99970;setTimeout(function(){var i=document.getElementById('pnmin');if(i)i.focus()},50)}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-psk],[data-pnm],[data-pskset],[data-pskbuy],[data-pnmsave],[data-ovx]');if(!b)return;
+  if(b.dataset.ovx){var o=document.getElementById(b.dataset.ovx);if(o)o.remove();if(b.dataset.ovx==='pskov')PSKU=null;return}
+  if(b.dataset.psk)return pskOpen(b.dataset.psk);
+  if(b.dataset.pnm)return pnmOpen(b.dataset.pnm);
+  if(b.dataset.pskset){var a=b.dataset.pskset.split('|'),p=petOf(a[0]);if(p&&(!a[1]||(S.psk&&S.psk[a[1]]))){p.sk=a[1];save();pskOpen(a[0]);paint()}return}
+  if(b.dataset.pskbuy){if(PSK[b.dataset.pskbuy])buySku('pskin_'+b.dataset.pskbuy);return}
+  if(b.dataset.pnmsave){var q=petOf(b.dataset.pnmsave),i=document.getElementById('pnmin');if(q&&i){q.nm=i.value.replace(/[<>&"'`]/g,'').trim().slice(0,12);save();var o2=document.getElementById('pnmov');if(o2)o2.remove();paint()}}});
 /* ===== БЛОКИ ФЕРМЫ: поле, амбар, двор, лавка, озеро, загон и декор можно двигать и менять местами ===== */
 var BDEF=[{id:'field',n:'Поле',r:[0,6,18,18]},{id:'barn',n:'Амбар',r:[21,0,10,9]},{id:'yard',n:'Двор',r:[20,9,12,9]},{id:'stall',n:'Лавка',r:[20,18,9,7]},{id:'lake',n:'Озеро',r:[0,29,9,11]},{id:'pasture',n:'Загон',r:[10,28,22,19]}];
 var DDEF=[{id:'t1',k:'tree',p:[40,92],r:[2,4,2,2],f:1},{id:'t2',k:'tree',p:[104,92],r:[6,4,2,2],f:1},{id:'t3',k:'tree',p:[168,92],r:[10,4,2,2],f:1},{id:'t4',k:'tree',p:[232,92],r:[14,4,2,2],f:1},
@@ -1489,7 +1582,7 @@ function drawMap(now){
   ENT.forEach(function(e){if(!showE(e))return;L.push([e.y,function(){
     if(e.t==='hen')dHen(g,e.x,e.y,e.d,e.mv?e.f:0,e.v);else if(e.t==='cow')dCow(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='sheep')dSheep(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='pig')dPig(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='rabbit')dRabbit(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='turkey')dTurkey(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='duck')dDuck(g,e.x,e.y,e.d,e.mv?e.f:0);
     else if(e.t==='farmer')dFarmer(g,e.x,e.y,e.d,e.f,e.mv,e);else if(e.t==='cat')dCat(g,e.x,e.y,e.d,e.mv?e.f:0);else if(e.t==='dog')dDog(g,e.x,e.y,e.d,e.mv?e.f:0)}])});
-  petSync();updE(dt,PEL);PEL.forEach(function(e){L.push([e.fly?5000+e.y:e.y,function(){drawPet(g,e,now);var p=petOf(e.u);if(tab!=='visit'&&p&&p.fed<=Date.now())pbub(g,Math.round(e.x),Math.round(e.y)-(e.fly?44:40),now)}])});
+  petSync();updE(dt,PEL);PEL.forEach(function(e){L.push([e.fly?5000+e.y:e.y,function(){var p=petOf(e.u);e.sk=p&&p.sk||'';drawPet(g,e,now);if(p&&p.nm)ptagDraw(g,Math.round(e.x),Math.round(e.y)+10,p.nm);if(tab!=='visit'&&p&&p.fed<=Date.now())pbub(g,Math.round(e.x),Math.round(e.y)-(e.fly?44:40),now)}])});
   L.push([424,function(){dCart(g,CART.x,424,((now/200)|0)%2)}]);
   L.sort(function(a,b){return a[0]-b[0]});L.forEach(function(q){q[1]()});
   tag(g,'Участок',256,MH0+2);bldDraw(g,now);
@@ -1678,7 +1771,7 @@ function worldPrev(k){var key=k+(SAOK?1:0);WPV=window.WPV||(window.WPV={});if(WP
     pell(g,TH.sand,150,84,28,16);pell(g,TH.water,150,84,24,12);R(g,TH.ripple,140,82,8,1);
     TH.tree(g,34,74);TH.tree(g,98,58);TH.bush(g,64,96);TH.rock(g,100,100);TH.flower(g,22,100);TH.flower(g,128,50);TH.bush(g,172,40)});
   var u=c.toDataURL();if(SAOK||k!=='farm')WPV[key]=u;return u}
-function worldBar(){return evBanner()+'<div class="wbar"><button data-tab="worlds">🌍<b>Мир</b>'+esc(wd().n.replace('Мир ',''))+'</button><button data-tab="build">🏗<b>Стройка</b>'+S.obj.length+' шт.</button><button data-tab="farms">🏡<b>Фермы</b>игроков</button><button data-tab="pets">🐾<b>Питомцы</b>'+(((S.pp&&S.pp.pets)||[]).length)+' шт.</button><button class="gold" data-tab="shop">⭐<b>Донат</b>бонусы</button></div>'}
+function worldBar(){return evBanner()+'<div class="wbar"><button data-tab="worlds">🌍<b>Мир</b>'+esc(wd().n.replace('Мир ',''))+'</button><button data-tab="build">🏗<b>Стройка</b>'+S.obj.length+' шт.</button><button data-tab="farms">🏡<b>Фермы</b>игроков</button><button data-tab="pets">🐾<b>Питомцы</b>'+(((S.pp&&S.pp.pets)||[]).length)+' шт.</button><button data-tab="clan">🏰<b>Клан</b>'+(CLN&&CLN.clan?esc(CLN.clan.n.slice(0,12)):'вместе')+'</button><button class="gold" data-tab="shop">⭐<b>Донат</b>бонусы</button></div>'}
 function viewWorlds(){var h='<h2>🌍 Миры</h2><p class="empty" style="margin:0 0 12px">Миры открываются по уровню бесплатно. В каждом свой пейзаж, бонус и особые постройки.</p>';
   WORDER.forEach(function(k){var w=WORLDS[k],ok=lvl()>=w.l,cur=wid()===k;
     h+='<div class="card wc'+(cur?' cur':'')+'"><img class="wp" src="'+worldPrev(k)+'" alt=""><div class="t">'+w.e+' '+w.n+'<div class="r">Бонус: '+w.t+'</div>'+(w.l?'<div class="r">Открывается с '+w.l+' уровня</div>':'')+'</div>'+(cur?'<span class="r">Здесь</span>':ok?'<button class="btn" data-zw="'+k+'">Перейти</button>':'<span class="r">🔒 ур. '+w.l+'</span>')+'</div>'});
@@ -1827,7 +1920,7 @@ function stFromSnap(sn,xp){
   var now=Date.now(),pl=[],i,q,c;
   for(i=0;i<9;i++){q=sn.pl&&sn.pl[i];c=q&&byId(q[0]);pl.push(c?{crop:q[0],t:now-(q[1]>=100?c.time*1000:q[1]/100*c.time*1000)}:null)}
   return{plots:pl,unlocked:Math.max(4,Math.min(9,sn.u||4)),pen:(sn.pn||[]).map(function(x){return x?now:0}),pet:sn.pet?1:0,dog:sn.dog?1:0,
-    obj:(sn.o||[]).filter(function(a){return OBJ_BY[a[0]]}).map(function(a){var q={k:a[0],x:a[1]|0,y:a[2]|0};if(a[4]&&SKD.obj[a[4]])q.s=a[4];if(a[5])q.m=1;if(a[3]>0){q.f=[];for(var z=0;z<Math.min(4,a[3]|0);z++)q.f.push(now-PF_TIME*600+z*30000)}return q}),sk:skClean(sn.sk),bl:blClean(sn.bl),pp:(function(){var o={eggs:[],pets:[],act:[],n:1};(sn.pt||[]).slice(0,PA_MAX).forEach(function(a,i){if(a&&PD[a[0]]){var u='v'+i;o.pets.push({u:u,pid:a[0],lv:Math.max(1,Math.min(5,a[1]|0)),xp:0,fed:a[2]?Date.now()+36e5:0,pt:0});o.act.push(u)}});return o})(),lake:{f:(function(){var a=[];for(var z=0;z<Math.min(8,sn.l|0);z++)a.push(now-PF_TIME*600+z*30000);return a})()},ld:Math.max(0,Math.min(6,sn.ld|0)),wl:WORLDS[sn.w]?sn.w:'farm',xp:xp||0,coins:0,fert:0,inv:{},ch:{c:0,r:0,l:0},sp:0,cap:20,mat:{},dec:{},fname:sn.fn||''}}
+    obj:(sn.o||[]).filter(function(a){return OBJ_BY[a[0]]}).map(function(a){var q={k:a[0],x:a[1]|0,y:a[2]|0};if(a[4]&&SKD.obj[a[4]])q.s=a[4];if(a[5])q.m=1;if(a[3]>0){q.f=[];for(var z=0;z<Math.min(4,a[3]|0);z++)q.f.push(now-PF_TIME*600+z*30000)}return q}),sk:skClean(sn.sk),bl:blClean(sn.bl),pp:(function(){var o={eggs:[],pets:[],act:[],n:1};(sn.pt||[]).slice(0,PA_MAX).forEach(function(a,i){if(a&&PD[a[0]]){var u='v'+i;o.pets.push({u:u,pid:a[0],lv:Math.max(1,Math.min(5,a[1]|0)),xp:0,fed:a[2]?Date.now()+36e5:0,pt:0,sk:PSK[a[3]]?a[3]:'',nm:String(a[4]||'').replace(/[<>&"'`]/g,'').slice(0,12)});o.act.push(u)}});return o})(),lake:{f:(function(){var a=[];for(var z=0;z<Math.min(8,sn.l|0);z++)a.push(now-PF_TIME*600+z*30000);return a})()},ld:Math.max(0,Math.min(6,sn.ld|0)),wl:WORLDS[sn.w]?sn.w:'farm',xp:xp||0,coins:0,fert:0,inv:{},ch:{c:0,r:0,l:0},sp:0,cap:20,mat:{},dec:{},fname:sn.fn||''}}
 function visitFarm(id){
   if(!API)return toast('Нет связи с сервером');
   fetch(API+'/farm?id='+encodeURIComponent(id)).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(f){
@@ -1853,7 +1946,7 @@ function admGrant(s){
 function mkSnap(){
   var pl=[],i,p,s;
   for(i=0;i<9;i++){p=S.plots[i];if(!p||i>=S.unlocked){pl.push(0);continue}s=plotState(p);pl.push([p.crop,s.ready?100:Math.min(99,s.pct||0)])}
-  return{w:wid(),ld:S.ld||0,u:S.unlocked,pl:pl,o:S.obj.map(function(o){return[o.k,o.x,o.y,(o.f||[]).length,o.s||'',o.m?1:0]}),sk:skClean(S.sk),bl:(S.bl&&Object.keys(S.bl).length?blClean(S.bl):undefined),pt:((S.pp&&S.pp.act)||[]).map(petOf).filter(Boolean).map(function(p){return[p.pid,p.lv,p.fed>Date.now()?1:0]}),l:((S.lake&&S.lake.f)||[]).length,pn:S.pen.map(function(t){return t?1:0}),pet:S.pet?1:0,dog:S.dog?1:0,fn:S.fname||''}}
+  return{w:wid(),ld:S.ld||0,u:S.unlocked,pl:pl,o:S.obj.map(function(o){return[o.k,o.x,o.y,(o.f||[]).length,o.s||'',o.m?1:0]}),sk:skClean(S.sk),bl:(S.bl&&Object.keys(S.bl).length?blClean(S.bl):undefined),pt:((S.pp&&S.pp.act)||[]).map(petOf).filter(Boolean).map(function(p){return[p.pid,p.lv,p.fed>Date.now()?1:0,p.sk||'',p.nm||'']}),l:((S.lake&&S.lake.f)||[]).length,pn:S.pen.map(function(t){return t?1:0}),pet:S.pet?1:0,dog:S.dog?1:0,fn:S.fname||''}}
 function snapPost(){
   if(!API||!S)return;var tg=window.Telegram&&Telegram.WebApp;if(!tg||!tg.initData)return;
   api('/snap',{name:S.fname||myName(),lvl:lvl(),xp:S.xp,coins:S.coins,tm:S.tm?1:0,ch:((S.ch||{}).c|0)+((S.ch||{}).r|0)+((S.ch||{}).l|0),fe:S.fert|0,cd:{c:(S.ch||{}).c|0,r:(S.ch||{}).r|0,l:(S.ch||{}).l|0},snap:mkSnap()}).catch(function(){})}
@@ -1865,12 +1958,13 @@ var CH={c:{n:'Обычный',e:'📦',p:15,col:'#b08a5a'},r:{n:'Редкий',e
 var POOL={c:[['c',60,40],['c',120,30],['c',250,15],['f',1,10],['f',2,5]],r:[['c',250,35],['c',500,25],['c',900,10],['f',2,15],['f',4,10],['b',60,5]],l:[['c',1000,30],['c',2000,20],['c',4000,8],['f',6,20],['f',10,12],['b',180,10]]};
 function bxm(){return S.bx&&S.bx.t>Date.now()?S.bx.m:1}
 function vipOn(){return S.vip>Date.now()}
-function price(s){var p=s.split('_');return p[0]==='chest'?CH[p[1]].p:p[0]==='bx'?p[1]*p[2]*5:s==='vip'?150:s==='bp'?100:0}
+function price(s){var p=s.split('_');return p[0]==='pskin'&&PSK[p[1]]?PSK[p[1]].p:p[0]==='chest'?CH[p[1]].p:p[0]==='bx'?p[1]*p[2]*5:s==='vip'?150:s==='bp'?100:0}
 function grant(s){var p=s.split('_'),n=Date.now();
   if(p[0]==='adm')return admGrant(s);
   if(p[0]==='ref'||p[0]==='refw'){var rc=+p[1]||0;S.coins+=rc;toast(p[0]==='ref'?'🤝 Друг сделал покупку: +'+rc+' 🪙':'🎁 Бонус за приглашение: +'+rc+' 🪙');save();paint();return}
   if(p[0]==='skin'&&SKD[p[1]]&&SKD[p[1]][p[2]]){(S.skn||(S.skn={}))[p[1]+'_'+p[2]]=1;var sob=null;if(p[1]==='obj'&&SKBUY&&SKBUY.c==='obj'&&SKBUY.id===p[2])sob=S.obj[SKBUY.i];skClr();if(sob)sob.s=p[2];else if(p[1]!=='obj')(S.sk||(S.sk={}))[p[1]]=p[2];toast('🎨 Скин получен: '+SKD[p[1]][p[2]].n);save();paint();if(document.getElementById('skov'))skRender();return}
   if(p[0]==='egg'){if(giveEgg(p[1],p[2]))toast('🥚 Яйцо в инкубаторе!');save();paint();return}
+  if(p[0]==='pskin'){if(PSK[p[1]]){(S.psk||(S.psk={}))[p[1]]=1;toast('🎨 Скин «'+PSK[p[1]].n+'» получен!');save();paint();if(PSKU&&document.getElementById('pskov'))pskOpen(PSKU)}return}
   if(p[0]==='chest')S.ch[p[1]]++;
   else if(p[0]==='bx'){var b=S.bx&&S.bx.t>n?S.bx:null;S.bx={m:Math.max(+p[1],b?b.m:0),t:Math.min(n+7*864e5,(b?b.t:n)+p[2]*864e5)}}
   else if(s==='vip')S.vip=Math.max(S.vip,n)+30*864e5;
@@ -2068,6 +2162,10 @@ Object.assign(EN,{'Ночь тыкв':'Pumpkin Night','Тыква-король':
 Object.assign(EN,{'Яйцо Тыквенной долины':'Pumpkin Valley egg','Ускорение ×2 на 30 мин':'×2 boost for 30 min','Куплено':'Bought','Всего собрано':'Total collected','до конца ивента':'until the event ends','ещё':'left'});
 Object.assign(EN,{'Помогите соседям':'Help your neighbors','🏆 Неделя':'🏆 Week','⭐ Всё время':'⭐ All time','Рейтинг недели':'Weekly ranking','Призы топ-3 в понедельник':'Top-3 prizes on Monday','До конца недели':'Until the week ends','Вы пока не в рейтинге — зарабатывайте опыт!':'You are not ranked yet — earn some XP!','Неделя только началась — станьте первым!':'The week has just started — be the first!','🤝 Сегодня уже помогли':'🤝 Already helped today','Нет связи с сервером':'No connection to the server','Загрузка…':'Loading…'});
 Object.assign(EN,{'Ваш прогресс обнулён администратором':'Your progress was reset by an administrator','Причина:':'Reason:','Понятно, начать заново':'Got it, start over','Объявление':'Announcement','Понятно':'Got it'});
+Object.assign(EN,{'🌾 Мои фермы':'🌾 My farms','Отдельные фермы на одном Telegram: свой прогресс, рейтинг, друзья и почта. Работает на телефоне и ПК.':'Separate farms on one Telegram account: own progress, ranking, friends and mail. Works on phone and PC.','сейчас':'current','Новая ферма':'New farm','☁️ Восстановить с сервера':'☁️ Restore from server','Найдена ваша ферма на сервере':'Your farm was found on the server','Восстановить':'Restore','Начать заново':'Start over','Оставить эту':'Keep this one','Обновлена':'Updated','ур.':'lvl'});
+Object.assign(EN,{'Клан':'Clan','🏰 Клан':'🏰 Clan','вместе':'together','Назад в город':'Back to town','Кланы работают внутри Telegram.':'Clans work inside Telegram.','Загружаю…':'Loading…','Вступить':'Join','Создать клан':'Create clan','Позвать':'Invite','🎯 Общая цель недели':'🎯 Weekly clan goal','👥 Участники':'👥 Members','🏆 Рейтинг кланов':'🏆 Clan ranking','🎨 Скин':'🎨 Skin','✏️ Бирка':'✏️ Name tag','Обычный':'Default','Надеть':'Wear','Надет':'Worn','Закрыть':'Close','Сохранить':'Save','Отмена':'Cancel','Бирка питомца':'Pet name tag','🔑 Вступить по коду':'🔑 Join by code','➕ Создать клан':'➕ Create a clan','🚪 Выйти из клана':'🚪 Leave clan','💥 Распустить клан':'💥 Disband clan','🔄 Новый код приглашения':'🔄 New invite code','Играйте вместе: у клана общая цель недели. Выполнили — награда каждому. Никаких войн, только уют.':'Play together: the clan has one weekly goal. Reach it and everyone gets a reward. No wars, just cozy.','Купленный скин подходит всем вашим питомцам.':'A purchased skin fits all your pets.','До 12 символов. Бирку увидят все, кто придёт к вам в гости.':'Up to 12 characters. Everyone who visits your farm will see the tag.'});
+Object.assign(EN,{'Лёд':'Ice','Конфета':'Candy','Тень':'Shadow','Голограмма':'Hologram'});
+Object.assign(EN,{'Общая цель недели':'Weekly clan goal','Участники':'Members','Рейтинг кланов':'Clan ranking','Код даёт создатель клана':'The code is given by the clan creator','До 20 игроков. Цель недели растёт вместе с числом участников.':'Up to 20 players. The weekly goal grows with the number of members.','Каждый участник фермы вносит свой опыт за неделю':'Every member adds their weekly XP','Награда — каждому, кто внёс от 200 опыта. Выдаётся в начале новой недели.':'Everyone who contributed 200+ XP gets the reward. It is issued at the start of the new week.','до конца недели':'until week end','игроков':'players','игр.':'pl.','цель недели':'weekly goal','опыта за неделю':'XP this week','Код приглашения':'Invite code','Пока ни одного клана. Станьте первым!':'No clans yet. Be the first!','Введите код клана':'Enter the clan code','Введите название клана':'Enter a clan name','Название клана':'Clan name','Игрок исключён':'Player removed','Новый код готов':'New code is ready','Вы вышли из клана':'You left the clan','Клан распущен':'Clan disbanded','Вы в клане!':'You joined the clan!','Клан создан!':'Clan created!','Нет связи с сервером':'No connection to the server','Точно выйти? Нажмите повторно':'Really leave? Tap again','Точно распустить? Нажмите повторно':'Really disband? Tap again','Исключить':'Remove'});
 Object.assign(EN,{'Поле':'Field','Двор':'Yard','Загон':'Paddock','Деревце':'Tree','Куст':'Bush','Стог сена':'Hay bale','Ящик':'Crate','Бочка':'Barrel','Валун':'Boulder','⇄ Поменять':'⇄ Swap','↺ На место':'↺ Reset','🗑 Убрать':'🗑 Remove','↺ Всё на место':'↺ Reset all','Нажмите на предмет, с которым поменять местами.':'Tap the item to swap with.','Нажмите на предмет, с которым поменять':'Tap the item to swap with','Нажмите на свободное место — переедет туда. Или «Поменять» и выберите, с чем.':'Tap an empty spot to move it there. Or press “Swap” and choose with what.','Не помещается — освободите место':'Does not fit — free up some space','⇄ Поменяли местами':'⇄ Swapped','🗑 Убрано. «Всё на место» вернёт':'🗑 Removed. “Reset all” brings it back','Родное место занято':'Original spot is taken','↺ Вернули на место':'↺ Put back','Всё уже на местах':'Everything is already in place','↺ Всё на своих местах':'↺ Everything is back in place','Нажмите на любой предмет — поле, амбар, озеро, деревья — потом на свободное место: он переедет туда. «Поменять» меняет два предмета местами.':'Tap any item — field, barn, lake, trees — then an empty spot to move it there. “Swap” exchanges two items.'});
 
 function T(s){if(LANG!=='en'||typeof s!=='string'||!/[А-Яа-яЁё]/.test(s))return s;var c=TC[s];if(c!==undefined)return c;var r=s;PAT.forEach(function(p){r=r.replace(p[0],p[1])});
