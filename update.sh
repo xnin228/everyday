@@ -2399,8 +2399,19 @@ if [[ -d /var/www/minifarm ]] && curl -fsS --max-time 30 "$RAW_URL" -o /tmp/mf-i
 else warn "Копию игры на сервере не обновлял (не страшно: основная игра на GitHub Pages)."; fi
 
 systemctl restart minifarm minifarm-pay
-sleep 3
-systemctl is-active --quiet minifarm && systemctl is-active --quiet minifarm-pay && say "Сервисы работают ✅" || { err "Сервис не поднялся: journalctl -u minifarm -n 40 --no-pager"; exit 1; }
+ok=0
+for _i in $(seq 1 12); do
+  sleep 2
+  if systemctl is-active --quiet minifarm && systemctl is-active --quiet minifarm-pay; then ok=1; break; fi
+done
+if [[ $ok -eq 1 ]]; then sleep 4; systemctl is-active --quiet minifarm && systemctl is-active --quiet minifarm-pay || ok=0; fi
+if [[ $ok -eq 1 ]]; then say "Сервисы работают ✅"; else
+  warn "Сервис не поднялся. Последние строки журнала (пришлите их разработчику):"
+  echo "----- minifarm -----"; journalctl -u minifarm -n 30 --no-pager 2>&1 | tail -30
+  echo "----- minifarm-pay -----"; journalctl -u minifarm-pay -n 30 --no-pager 2>&1 | tail -30
+  cp -a "$BK"/*.py "$APP_DIR/" 2>/dev/null; systemctl restart minifarm minifarm-pay; sleep 3
+  err "Код возвращён на прежнюю версию (данные игроков не тронуты). Бот работает как раньше."; exit 1
+fi
 PORT_VAL="$(grep -E '^PORT=' .env | cut -d= -f2 || true)"; PORT_VAL="${PORT_VAL:-3000}"
 curl -fsS --max-time 5 "http://127.0.0.1:$PORT_VAL/event" | grep -q weather && say "API акций и погоды отвечает ✅" || warn "API /event не ответил — смотри journalctl -u minifarm -n 40"
 echo
