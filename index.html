@@ -1068,11 +1068,11 @@ function banCheck(){if(!API||!S)return;api('/claim',{op:'ban'}).then(function(j)
 setTimeout(function(){if(S&&S.bn)banShow(S.bn);banCheck()},1100);
 setInterval(banCheck,45000);
 /* ===== КЛАНЫ (без войн: общая цель недели) ===== */
-var CLN=null,CLNT=0,CLNB=0,CLE='🏰',CLCONF='',CLCT=0,CLSUB='main',CLQ='',CLFOUND=null,CLJM='req',CLSEL='';
+var CLERR='',CLN=null,CLNT=0,CLNB=0,CLE='🏰',CLCONF='',CLCT=0,CLSUB='main',CLQ='',CLFOUND=null,CLJM='req',CLSEL='';
 function clN(n){return String(Math.round(n)).replace(/\B(?=(\d{3})+$)/g,' ')}
 function clanOk(){return API&&tg()&&tg().initData}
 function clanLoad(force){if(!clanOk()||CLNB||(!force&&Date.now()-CLNT<15000))return;CLNB=1;CLNT=Date.now();
- api('/clan',{op:'info'}).then(function(j){CLNB=0;if(j&&j.ok){CLN=j;clanPaint()}}).catch(function(){CLNB=0})}
+ api('/clan',{op:'info'}).then(function(j){CLNB=0;if(j&&j.ok){CLN=j;CLERR=''}else CLERR=(j&&j.err)||'пустой ответ';clanPaint()}).catch(function(e){CLNB=0;CLERR='нет связи: '+(e&&e.message||e);clanPaint()})}
 function clanPaint(){if(tab!=='clan')return;var a=document.activeElement;if(a&&a.tagName==='INPUT')return;paint()}
 function clanDo(b,msg,after){if(CLNB)return;CLNB=1;CLCONF='';
  api('/clan',b).then(function(j){CLNB=0;if(j){if(j.per){CLN=j;if(b.op==='search')CLFOUND=j.found||[]}CLNT=Date.now();if(j.ok===false&&j.err)toast(j.err);else{if(msg)toast(msg);if(after)after(j)}}paint()}).catch(function(){CLNB=0;toast('Нет связи с сервером')})}
@@ -1083,7 +1083,7 @@ function clJmPick(cur,attr){return['open','req','code'].map(function(k){return'<
 function viewClan(){clanLoad();
  var back='<button class="btn" data-tab="town" style="width:100%;margin-top:12px">Назад в город</button>',h='<h2>🏰 Клан</h2>';
  if(!clanOk())return h+'<p class="empty">Кланы работают внутри Telegram.</p>'+back;
- if(!CLN)return h+'<p class="empty">Загружаю…</p>'+back;
+ if(!CLN)return h+(CLERR?'<p class="empty">Не удалось загрузить клан ('+esc(String(CLERR))+')</p><button class="btn" data-clretry="1" style="width:100%">Повторить</button>':'<p class="empty">Загружаю…</p>')+back;
  var c=CLN.clan,i;
  if(!c){
   h+='<div class="r" style="margin-bottom:10px">Играйте вместе: у клана общая цель недели. Выполнили — награда каждому. Никаких войн, только уют.</div>';
@@ -1127,8 +1127,9 @@ function viewClan(){clanLoad();
  CLN.rank.forEach(function(r,k){h+='<div class="card"'+(r.me?' style="background:var(--gold)"':'')+'><div class="t">'+(k<3?['🥇','🥈','🥉'][k]:'№'+(k+1))+' '+r.e+' '+esc(r.n)+'<div class="r">'+r.k+' игр. · цель недели '+r.pct+'%</div></div></div>'});
  return h+back}
 function clConf(k,f,msg){if(CLCONF===k)return f();CLCONF=k;clearTimeout(CLCT);CLCT=setTimeout(function(){CLCONF='';if(tab==='clan')paint()},5000);paint()}
-document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-clj],[data-clc],[data-cle],[data-clk],[data-cll],[data-cln],[data-cld],[data-clcopy],[data-clshare],[data-clsub],[data-clsearch],[data-clopen],[data-clapply],[data-clacc],[data-cldec],[data-clsel],[data-clpro],[data-cldem],[data-cltr],[data-cljm],[data-clsetjm],[data-clsetds]');if(!b)return;var d=b.dataset;
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-clj],[data-clc],[data-cle],[data-clk],[data-cll],[data-cln],[data-cld],[data-clcopy],[data-clshare],[data-clsub],[data-clsearch],[data-clopen],[data-clapply],[data-clacc],[data-cldec],[data-clsel],[data-clpro],[data-cldem],[data-cltr],[data-cljm],[data-clsetjm],[data-clsetds],[data-clretry]');if(!b)return;var d=b.dataset;
  if(d.cle!==undefined){if(CLN&&CLN.emo[+d.cle])CLE=CLN.emo[+d.cle];return paint()}
+ if(d.clretry){CLERR='';clanLoad(1);return paint()}
  if(d.clsub){CLSUB=d.clsub;return paint()}
  if(d.cljm){CLJM=d.cljm;return paint()}
  if(d.clsearch){var q=document.getElementById('clq');CLQ=q?q.value.trim():'';return clanDo({op:'search',q:CLQ})}
