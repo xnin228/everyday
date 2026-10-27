@@ -2803,7 +2803,7 @@ $DOMAIN {
         respond 204
     }
 
-    @pay path /invoice /claim /snap /farms /farm
+    @pay path /invoice /claim /snap /farms /farm /clan
     handle @pay {
         reverse_proxy 127.0.0.1:3001 {
             header_down Access-Control-Allow-Origin "$ORIGIN"

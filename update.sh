@@ -2524,5 +2524,12 @@ fi
 PORT_VAL="$(grep -E '^PORT=' .env | cut -d= -f2 || true)"; PORT_VAL="${PORT_VAL:-3000}"
 OK=0; for i in $(seq 1 20); do curl -fsS --max-time 3 "http://127.0.0.1:$PORT_VAL/event" 2>/dev/null | grep -q weather && { OK=1; break; }; sleep 1; done
 [ $OK = 1 ] && say "API отвечает ✅" || warn "API не ответил за 20 с — смотри journalctl -u minifarm -n 40 --no-pager"
+CF=/etc/caddy/Caddyfile
+if [[ -f $CF ]] && grep -q "@pay path" $CF && ! grep -E "@pay path.* /clan( |$)" $CF >/dev/null; then
+  cp -a $CF $CF.bak.$(date +%s)
+  sed -i -E 's#^(\s*@pay path .*[^ ])\s*$#\1 /clan#' $CF
+  if caddy validate --config $CF --adapter caddyfile >/dev/null 2>&1; then systemctl reload caddy && say "Caddy: путь /clan подключён ✅"; else
+    warn "Caddy не принял правку, возвращаю"; cp -a $(ls -t $CF.bak.* | head -1) $CF; fi
+fi
 echo
 echo "Готово. Игроки и их данные не затронуты. Кланы: создание за 100к, ранги, заявки, поиск."
