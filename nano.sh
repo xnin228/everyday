@@ -558,6 +558,9 @@ SKINS = {
     "grass": {"sakura": 25, "winter": 45, "night": 75},
 }
 
+# скины питомцев: pskin_<id> -> цена в ⭐ (должно совпадать с PSK в index.html)
+PSKINS = {"ice": 45, "candy": 45, "neon": 60, "shadow": 60, "gold": 75, "holo": 100}
+
 def price(sku):
     p = sku.split("_")
     try:
@@ -569,6 +572,7 @@ def price(sku):
             return {"c": 15, "r": 45, "l": 120}[p[1]]
         if p[0] == "bx" and 2 <= int(p[1]) <= 10 and int(p[2]) in (1, 3, 7):
             return int(p[1]) * int(p[2]) * 5
+        if p[0] == "pskin" and len(p) == 2 and p[1] in PSKINS: return PSKINS[p[1]]
         if sku == "vip": return 150
         if sku == "bp": return 100
     except (IndexError, ValueError):
@@ -580,6 +584,9 @@ def led_add(d, uid, sku):
     try:
         p = str(sku).split("_"); L = d.setdefault("led", {}).setdefault(str(uid), {})
         if p[0] == "chest" and p[1] in ("c", "r", "l"): L[p[1]] = L.get(p[1], 0) + 1
+        elif p[0] == "pskin" and p[1] in PSKINS:
+            ps = L.setdefault("ps", [])
+            if p[1] not in ps: ps.append(p[1])
         elif sku.startswith("adm_fert_"):
             n = int(sku[9:])
             if n > 0: L["fe"] = L.get("fe", 0) + n
@@ -764,6 +771,7 @@ class H(BaseHTTPRequestHandler):
                     return self._send(200, {"ok": False, "err": "ban", "ban": _b})
             elif body.get("op") == "ban":
                 return self._send(200, {"ok": False})
+            if self.path == "/clan": return self._send(200, admin.clan_api(body, bot))
             if self.path == "/invoice": return self._send(200, payments.api_invoice(bot, body))
             if self.path == "/claim":
                 if body.get("op") in ("box", "send", "ack"): return self._send(200, admin.mail_api(body, bot))
@@ -935,6 +943,26 @@ def _alert(uid, rec, why, claimed):
     threading.Thread(target=_s, daemon=True).start()
 
 
+PSK_IDS = ("ice", "candy", "neon", "shadow", "gold", "holo")
+
+
+def _snap_clean(snap, led):
+    """Питомцы в снимке для гостей: скин показываем только купленный, бирку чистим от разметки."""
+    try:
+        pt = snap.get("pt")
+        if isinstance(pt, list):
+            own = set((led or {}).get("ps") or []); out = []
+            for q in pt[:3]:
+                if not isinstance(q, list) or not q: continue
+                sk = str(q[3]) if len(q) > 3 else ""
+                nm = _clean(q[4], 12) if len(q) > 4 else ""
+                out.append([q[0], q[1] if len(q) > 1 else 1, q[2] if len(q) > 2 else 0, sk if (sk in own and sk in PSK_IDS) else "", nm])
+            snap["pt"] = out
+    except Exception:
+        pass
+    return snap
+
+
 def record_snapshot(uid, name, lvl, xp, coins, snap, tm=0, ex=None):
     """Сохраняет снимок фермы игрока (вызывается из HTTP-сервиса)."""
     now = time.time()
@@ -961,6 +989,7 @@ def record_snapshot(uid, name, lvl, xp, coins, snap, tm=0, ex=None):
             return False
         if not old:
             notify("new", "🆕 Новый игрок: <b>%s</b> (<code>%s</code>), ур. %s" % (_clean(name) or "Фермер", uid, max(1, int(lvl or 1))))
+        snap = _snap_clean(snap, ex.get("led"))
         wk = week_id(now)
         rec = {
             "name": _clean(name) or "Фермер",
@@ -1013,12 +1042,178 @@ def top_week(uid):
     rows = [(u, _week_gain(v, w), v) for u, v in d.items() if not out_of_rating(u, v, hd)]
     rows = [r for r in rows if r[1] > 0]
     rows.sort(key=lambda r: r[1], reverse=True)
-    out = [{"id": hid(u), "name": v.get("name", "Фермер"), "lvl": v.get("lvl", 1), "gain": g,
+    ce = clan_emoji_map()
+    out = [{"id": hid(u), "name": v.get("name", "Фермер"), "lvl": v.get("lvl", 1), "gain": g, "ce": ce.get(u, ""),
             "me": 1 if u == str(uid) else 0} for u, g, v in rows[:20]]
     me = next((i + 1 for i, r in enumerate(rows) if r[0] == str(uid)), 0)
     mg = next((r[1] for r in rows if r[0] == str(uid)), 0)
     left = int((w + 1) * 604800 + 4 * 86400 - time.time())
     return {"ok": True, "rows": out, "me": me, "mg": mg, "left": left, "prizes": [p[0] for p in WEEK_PRIZES]}
+
+
+# ---------- кланы (без войн: общая цель недели) ----------
+CLAN_MAX = 20
+CLAN_GOAL_PER = 2000          # опыта в неделю на каждого участника — общая цель клана
+CLAN_MINC = 200               # минимальный вклад, чтобы получить награду
+CLAN_CD = 86400               # пауза после выхода из клана
+# (доля цели, монеты каждому, удобрение, яйцо, значок)
+CLAN_TIERS = [(1.0, 400, 0, None, "🥉"), (1.5, 900, 5, None, "🥈"), (2.0, 1800, 10, "egg_farm_s", "🥇")]
+CLAN_EMO = ["🏰", "🌻", "🐄", "🌾", "🍎", "🐔", "🐝", "🍯", "🥕", "🌽", "🍓", "🐑", "🐴", "🦆", "🐸", "🐻", "🦊", "🌙", "⭐", "🔥", "💎", "🍀", "🎃", "❄️"]
+
+
+def _cinit(d):
+    d.setdefault("clans", {}); d.setdefault("clanof", {}); d.setdefault("clanl", {})
+
+
+def _cname(s):
+    s = re.sub(r"[<>&\"'`]", "", str(s or "")); s = re.sub(r"\s+", " ", s).strip()
+    return s[:16]
+
+
+def _ccode(d):
+    import random
+    al = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    used = set(c.get("c") for c in d["clans"].values())
+    for _ in range(50):
+        c = "".join(random.choice(al) for _ in range(6))
+        if c not in used: return c
+    return uuid.uuid4().hex[:8].upper()
+
+
+def _cgain(uid, v, w, mrec, hd):
+    if not v or out_of_rating(uid, v, hd): return 0
+    g = _week_gain(v, w)
+    if mrec.get("jw") == w: g -= mrec.get("jg", 0)
+    return max(0, min(g, 150000))
+
+
+def _cstat(c, pl, w, hd):
+    rows = []
+    for u, m in c["m"].items():
+        v = pl.get(u) or {}
+        rows.append((u, _cgain(u, v, w, m, hd), v, m))
+    total = sum(r[1] for r in rows); goal = CLAN_GOAL_PER * max(1, len(rows))
+    return rows, total, goal
+
+
+def _ctier(total, goal):
+    t = -1
+    for i, x in enumerate(CLAN_TIERS):
+        if total >= goal * x[0]: t = i
+    return t
+
+
+def clan_emoji_map():
+    try:
+        d = P._load(); cl = d.get("clans") or {}
+        return {u: cl[c]["e"] for u, c in (d.get("clanof") or {}).items() if c in cl}
+    except Exception:
+        return {}
+
+
+def _cview(d, uid, w):
+    pl = _pload(); hd = hidden_ids(); cl = d["clans"]; cid = d["clanof"].get(uid)
+    out = {"ok": True, "per": CLAN_GOAL_PER, "emo": CLAN_EMO, "max": CLAN_MAX,
+           "left": int((w + 1) * 604800 + 4 * 86400 - time.time()),
+           "tiers": [{"f": x[0], "c": x[1], "fe": x[2], "egg": 1 if x[3] else 0, "i": x[4]} for x in CLAN_TIERS], "minc": CLAN_MINC}
+    cd = d["clanl"].get(uid, 0) + CLAN_CD - time.time()
+    if cd > 0: out["cd"] = int(cd)
+    rank = []
+    for k, c in cl.items():
+        rows, total, goal = _cstat(c, pl, w, hd)
+        rank.append({"n": c["n"], "e": c["e"], "k": len(rows), "t": total, "pct": int(100 * total / goal), "me": 1 if k == cid else 0})
+    rank.sort(key=lambda r: (r["pct"], r["t"]), reverse=True)
+    out["rank"] = rank[:12]
+    if cid in cl:
+        c = cl[cid]; rows, total, goal = _cstat(c, pl, w, hd)
+        rows.sort(key=lambda r: r[1], reverse=True)
+        out["clan"] = {"n": c["n"], "e": c["e"], "code": c["c"], "owner": 1 if c["o"] == uid else 0,
+                       "total": total, "goal": goal, "tier": _ctier(total, goal),
+                       "members": [{"h": hid(u), "name": _clean(v.get("name"), 16) or "Фермер", "lvl": v.get("lvl", 1), "g": g,
+                                    "own": 1 if u == c["o"] else 0, "me": 1 if u == uid else 0} for u, g, v, m in rows]}
+    return out
+
+
+def clan_api(body, bot=None):
+    """POST /clan. op: info · create{name,e} · join{code} · leave · kick{h} · newcode · disband."""
+    uid = P.user_id(body.get("initData", ""))
+    if not uid: return {"ok": False, "err": "auth"}
+    op = body.get("op"); w = week_id(); now = time.time(); err = None; ev = None
+    with P._Lock():
+        d = P._load(); _cinit(d); cl = d["clans"]
+        cid = d["clanof"].get(uid)
+        if cid and cid not in cl: d["clanof"].pop(uid, None); cid = None
+        c = cl.get(cid) if cid else None
+        pl = _pload(); me = pl.get(uid) or {}
+        if op == "create":
+            name = _cname(body.get("name")); e = str(body.get("e") or "")
+            if c: err = "Вы уже в клане"
+            elif d["clanl"].get(uid, 0) + CLAN_CD > now: err = "После выхода из клана нужно подождать до суток"
+            elif len(name) < 2: err = "Название: от 2 до 16 символов"
+            elif e not in CLAN_EMO: err = "Выберите значок клана"
+            elif any(x["n"].lower() == name.lower() for x in cl.values()): err = "Такое название уже занято"
+            elif len(cl) >= 500: err = "Слишком много кланов"
+            else:
+                cid = uuid.uuid4().hex[:8]
+                cl[cid] = {"n": name, "e": e, "o": uid, "c": _ccode(d), "t": int(now),
+                           "m": {uid: {"j": int(now), "jw": w, "jg": _week_gain(me, w)}}}
+                d["clanof"][uid] = cid; ev = "🏰 Клан создан: %s %s" % (e, name)
+        elif op == "join":
+            code = re.sub(r"[^A-Z0-9]", "", str(body.get("code") or "").upper())
+            tc = next((k for k, x in cl.items() if x["c"] == code), None) if code else None
+            if c: err = "Вы уже в клане"
+            elif d["clanl"].get(uid, 0) + CLAN_CD > now: err = "После выхода из клана нужно подождать до суток"
+            elif not tc: err = "Клан с таким кодом не найден"
+            elif len(cl[tc]["m"]) >= CLAN_MAX: err = "В клане нет мест (макс. %d)" % CLAN_MAX
+            else:
+                cl[tc]["m"][uid] = {"j": int(now), "jw": w, "jg": _week_gain(me, w)}
+                d["clanof"][uid] = tc; cid = tc; ev = "🏰 Вступил в клан %s %s" % (cl[tc]["e"], cl[tc]["n"])
+        elif op == "leave":
+            if not c: err = "Вы не в клане"
+            else:
+                c["m"].pop(uid, None); d["clanof"].pop(uid, None); d["clanl"][uid] = int(now)
+                if not c["m"]: cl.pop(cid, None)
+                elif c["o"] == uid: c["o"] = min(c["m"], key=lambda u: c["m"][u].get("j", 0))
+                ev = "🏰 Вышел из клана %s" % c["n"]
+        elif op in ("kick", "newcode", "disband"):
+            if not c or c["o"] != uid: err = "Это может только создатель клана"
+            elif op == "newcode": c["c"] = _ccode(d)
+            elif op == "disband":
+                for u in list(c["m"]): d["clanof"].pop(u, None)
+                cl.pop(cid, None); ev = "🏰 Клан распущен: %s" % c["n"]
+            else:
+                tu = next((u for u in c["m"] if hid(u) == str(body.get("h", ""))), None)
+                if not tu or tu == uid: err = "Нельзя исключить этого игрока"
+                else:
+                    c["m"].pop(tu, None); d["clanof"].pop(tu, None); d["clanl"][tu] = int(now)
+                    ev = "🏰 Исключён из клана %s: %s" % (c["n"], (pl.get(tu) or {}).get("name", "?"))
+        elif op != "info":
+            err = "op"
+        if ev and not err: P._save(d)
+        res = _cview(d, uid, w)
+    if err: res["ok"] = False; res["err"] = err
+    elif ev: notify("act", ev + " (игрок %s)" % _nm(uid))
+    return res
+
+
+def clan_award(dd, last, pl, hd):
+    """Конец недели: награды участникам кланов, выполнивших цель. Возвращает [(uid, текст)]."""
+    _cinit(dd); out = []
+    for cid, c in dd["clans"].items():
+        rows, total, goal = _cstat(c, pl, last, hd)
+        t = _ctier(total, goal)
+        if t < 0: continue
+        pct, coins, fe, egg, ic = CLAN_TIERS[t]
+        for u, g, v, m in rows:
+            if g < CLAN_MINC: continue
+            gl = dd["grants"].setdefault(u, [])
+            gl.append({"id": uuid.uuid4().hex[:12], "sku": "adm_coins_%d" % coins})
+            if fe:
+                gl.append({"id": uuid.uuid4().hex[:12], "sku": "adm_fert_%d" % fe}); P.led_add(dd, u, "adm_fert_%d" % fe)
+            if egg: gl.append({"id": uuid.uuid4().hex[:12], "sku": egg})
+            out.append((u, "%s Клан «%s» выполнил цель недели (%d из %d)!\nВаша награда: %d 🪙%s%s. Откройте игру — она уже ждёт." % (
+                ic, c["n"], total, goal, coins, (" + %d 🧪" % fe) if fe else "", " + 🥚" if egg else "")))
+    return out
 
 
 def week_tick(bot=None):
@@ -1041,8 +1236,13 @@ def week_tick(bot=None):
             if egg:
                 gl.append({"id": uuid.uuid4().hex[:12], "sku": egg})
             wins.append((u, i + 1, c, et))
+        try: cmsgs = clan_award(dd, last, pl, hd)
+        except Exception as _e: cmsgs = []; notify("err", "❗ Кланы, награды недели: %s" % str(_e)[:120])
         dd["wkaward"] = w; P._save(dd)
     if bot:
+        for u, txt in cmsgs:
+            try: bot.send_message(int(u), txt)
+            except Exception: pass
         for u, place, c, et in wins:
             try:
                 bot.send_message(int(u), "🏆 Итоги недели: вы заняли %d место в рейтинге ферм!\nНаграда: %d 🪙%s. Откройте игру — награда уже ждёт." % (place, c, (" + " + et) if et else ""))
@@ -1055,7 +1255,8 @@ def top_all(limit=50):
     d = _pload(); hd = hidden_ids(); cutoff = time.time() - 90 * 86400
     rows = [(u, v) for u, v in d.items() if v.get("seen", 0) > cutoff and not out_of_rating(u, v, hd) and v.get("xp", 0) < XP_ABS_MAX]
     rows.sort(key=lambda r: r[1].get("xp", 0), reverse=True)
-    return [{"id": u, "name": v.get("name", "Фермер"), "xp": v.get("xp", 0)} for u, v in rows[:limit]]
+    ce = clan_emoji_map()
+    return [{"id": u, "name": v.get("name", "Фермер"), "xp": v.get("xp", 0), "ce": ce.get(u, "")} for u, v in rows[:limit]]
 
 
 def farms_list(limit=50):
@@ -1658,6 +1859,7 @@ def install(bot):
             "\n<b>Объявления и сброс</b>\n"
             "/announce &lt;текст&gt; — объявление всем, кто активировал бота (в личку + окно в игре), с подтверждением\n"
             "/flags — кого пометила защита от накрутки (кнопки: оставить / обнулить / спрятать)\n"
+            "/clans — список кланов, /clandel КОД — удалить клан (с подтверждением)\n"
             "/audit — сверка платежей: покупки, недоставленное, расхождения\n"
             "/logs — какие события присылать в личку · /journal [N] [вид] — последние события\n"
             "/ban &lt;игрок&gt; &lt;причина&gt; — ЗАБАНИТЬ (игра блокируется, причина на экране), /unban &lt;игрок&gt;, /bans — список\n"
@@ -1931,6 +2133,30 @@ def install(bot):
         if not is_admin(m.from_user.id): return
         bot.send_message(m.chat.id, audit_text(), parse_mode="HTML")
 
+    @bot.message_handler(commands=["clans"])
+    def _clans(m):
+        if not is_admin(m.from_user.id): return
+        d = P._load(); _cinit(d); pl = _pload(); hd = hidden_ids(); w = week_id(); rows = []
+        for k, c in d["clans"].items():
+            r, total, goal = _cstat(c, pl, w, hd)
+            rows.append((int(100 * total / goal), "%s <b>%s</b> · код <code>%s</code> · %d/%d чел. · цель %d%%\n   создатель: %s" % (
+                c["e"], c["n"], c["c"], len(c["m"]), CLAN_MAX, int(100 * total / goal), _nm(c["o"]))))
+        if not rows: return bot.reply_to(m, "Кланов пока нет.")
+        rows.sort(reverse=True)
+        bot.send_message(m.chat.id, "<b>Кланы (%d)</b>\n\n%s\n\nУдалить: /clandel КОД" % (len(rows), "\n".join(x[1] for x in rows[:30])), parse_mode="HTML")
+
+    @bot.message_handler(commands=["clandel"])
+    def _clandel(m):
+        if not is_admin(m.from_user.id): return
+        q = (m.text or "").split(None, 1)
+        if len(q) < 2: return bot.reply_to(m, "Пример: /clandel ABC123 (код клана из /clans)")
+        code = re.sub(r"[^A-Z0-9]", "", q[1].upper())
+        d = P._load(); _cinit(d)
+        cid = next((k for k, c in d["clans"].items() if c["c"] == code), None)
+        if not cid: return bot.reply_to(m, "Клан с таким кодом не найден.")
+        c = d["clans"][cid]
+        ask(m.chat.id, "cdel", cid, "🗑 <b>Удалить клан?</b>\n%s <b>%s</b>, участников: %d\nУчастники останутся без клана." % (c["e"], c["n"], len(c["m"])))
+
     @bot.message_handler(commands=["cancel"])
     def _cancel(m):
         if not is_admin(m.from_user.id): return
@@ -2028,6 +2254,12 @@ def install(bot):
                 try: bot.send_message(int(pl[0]), "🚫 Ваш аккаунт в «Мини-ферме» заблокирован.\nПричина: %s" % pl[1])
                 except Exception: pass
                 show("🚫 Игрок забанен. Игра заблокируется у него при следующей проверке (до минуты). Снять: /unban %s" % pl[0])
+            elif kind == "cdel":
+                with P._Lock():
+                    dd_ = P._load(); _cinit(dd_); cc_ = dd_["clans"].pop(pl, None)
+                    for u_ in list((cc_ or {}).get("m", {})): dd_["clanof"].pop(u_, None)
+                    P._save(dd_)
+                show("🗑 Клан удалён.")
             elif kind == "ann":
                 announce(bot, c.from_user.id, pl, chat)
                 show("📢 Рассылка запущена, отчёт придёт сообщением.")
@@ -2046,7 +2278,7 @@ def install(bot):
         broadcast.install(bot)          # рассылка-приглашение: свои 4 обработчика (запись, /stop, /resume, /bc)
     except Exception as e:
         print("broadcast не подключён:", e, flush=True)
-    first("message_handlers", 23)
+    first("message_handlers", 25)
     first("callback_query_handlers", 1)
 ADMEOF
 cat > "$APP_DIR/broadcast.py" <<'BCEOF'
